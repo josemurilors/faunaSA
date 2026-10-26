@@ -16,7 +16,7 @@
 
 | | |
 | --- | --- |
-| **Versão** | 0.2 |
+| **Versão** | 0.2.1 |
 | **Estado** | Alfa: spawn, animação e IA básica funcionam na instalação do autor; falta a paridade com o mod original (seção 7) |
 | **Contexto** | Projeto pessoal de modding, feito a partir da engenharia reversa do Myths Maker 2.7 |
 | **Alvo** | `gta_sa.exe` 1.0 US, com ASI Loader, Modloader e Open Limit Adjuster |
@@ -38,7 +38,7 @@
 
 ## Início rápido
 
-**Pacote pronto:** baixe `FaunaSA-v0.2.0.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
+**Pacote pronto:** baixe `FaunaSA-v0.2.1.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
 
 **A partir do código** (para quem já tem o mod original):
 
@@ -116,7 +116,7 @@ FaunaSA/
 **Limitações:** só `gta_sa.exe` 1.0 US (endereços fixos); só os valores de `location mode = 2` (todos os locais) são tratados; `weather` é ignorado.
 
 ### Cavalo
-Adaptação do [New Horse Mod](https://www.mixmods.com.br/2018/12/novo-mod-de-cavalo-by-nadalao/): nove cavalos nos mesmos locais do mod (nascem a 100 m, somem a 140 m depois de 60 s), vida 1500. Chegue a 3 m e aperte a tecla de **entrar no veículo** (a dica aparece na tela) para montar e de novo para desmontar. Dá para mirar e atirar do cavalo (com zoom ao mirar). Analógico/WASD: rumo e marcha (anda e depois corre); **tecla de correr**: galope; **tecla de pular**: pulo. Os arquivos do cavalo **não** vêm no pacote (a página do mod não informa termos de redistribuição): instale-os do seu New Horse Mod com `tools/install_horse.ps1`; sem eles o cavalo fica desligado; `[Horse] Enabled=0` no `FaunaSA.ini` também desliga. No **F9**, a primeira entrada spawna um cavalo à sua frente.
+Adaptação do [New Horse Mod](https://www.mixmods.com.br/2018/12/novo-mod-de-cavalo-by-nadalao/): nove cavalos nos mesmos locais do mod (nascem a 100 m, somem a 140 m depois de 60 s), vida 1500. Chegue a 3 m e aperte a tecla de **entrar no veículo** (a dica aparece na tela) para montar e de novo para desmontar. Dá para mirar e atirar do cavalo (com zoom ao mirar; a abertura da mira é limitada a 150° à frente do cavalo, ajustável em `[Horse] AimLimit` no `FaunaSA.ini`, 0 desliga). Analógico/WASD: rumo e marcha (anda e depois corre); **tecla de correr**: galope; **tecla de pular**: pulo. Os arquivos do cavalo **não** vêm no pacote (a página do mod não informa termos de redistribuição): instale-os do seu New Horse Mod com `tools/install_horse.ps1`; sem eles o cavalo fica desligado; `[Horse] Enabled=0` no `FaunaSA.ini` também desliga. No **F9**, a primeira entrada spawna um cavalo à sua frente.
 
 ## 5. Resiliência e diagnóstico
 

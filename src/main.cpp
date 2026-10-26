@@ -9,6 +9,7 @@
 #include "CPlayerInfo.h"
 #include "CHud.h"
 #include "CDraw.h"
+#include "CCamera.h"
 #include "CWaterLevel.h"
 #include "CAnimManager.h"
 #include "ePedAnims.h"
@@ -33,6 +34,7 @@
 #include "audio.hpp"
 #include "ifp.hpp"
 #include "pool.hpp"
+#include "riding.hpp"
 #include <cstdarg>
 #include <algorithm>
 #include <cmath>
@@ -465,7 +467,7 @@ void PlayAt(const std::string& file, const CVector& pos, float gain = 1.0f) {
 
 const std::string& PickOne(const std::vector<std::string>& v) { return v[(size_t)rand() % v.size()]; }
 
-float WrapAngle(float a) { while (a > 3.14159265f) a -= 6.2831853f; while (a < -3.14159265f) a += 6.2831853f; return a; }
+float WrapAngle(float a) { return mm::wrapAngle(a); }
 
 // Um passo da IA por frame para cada animal: decide, gira, anda (a nossa fisica, na altura do chao) e toca a animacao.
 void UpdateAnimals(unsigned now) {
