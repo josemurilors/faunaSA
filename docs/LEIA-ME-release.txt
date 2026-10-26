@@ -13,6 +13,12 @@ INSTALACAO
 4. F9 abre o menu de spawn de teste (setas escolhem, Enter spawna a sua frente, F9 fecha).
    Os animais tambem nascem sozinhos nos locais dos .ini, conforme horario e distancia.
 
+CAVALO (opcional)
+- Os arquivos do cavalo (New Horse Mod, de nadalao) NAO vem neste zip. Com o mod original em maos, rode no PowerShell:
+  .\tools\install_horse.ps1 -Jogo "<pasta do jogo>" -Cavalo "<pasta do New Horse Mod>"   (script no repositorio)
+  Ou copie: cavalo.dff/.txd para modloader\FaunaSA\gta3.img e horse_animation.ifp + os 5 .mp3 (cleo\cleo_audio) para FaunaSA\horse.
+- Sem eles o cavalo fica desligado e o resto funciona normalmente.
+
 SE ALGO DER ERRADO
 - O arquivo FaunaSA.log (na pasta do jogo) registra modelos, spawns e falhas.
 - Para desfazer: apague FaunaSA.asi, FaunaSA.ini, cleo\Animals\FaunaSA e modloader\Myths Maker.
@@ -23,4 +29,4 @@ nadalao (autor do mod), Tarzan_3 (animais e animacoes), Junior_Djjr (texturas, E
 e outros autores listados em CREDITS.md (incluido neste zip). Todo o credito pertence a eles.
 O FaunaSA (plugin ASI, gerador de animacoes) e de Jose Murilo R. Sabalo, licenca MIT (LICENSE).
 Codigo-fonte: https://github.com/josemurilors/faunaSA
-Os sons e o script CLEO originais NAO estao neste pacote (o FaunaSA nao os usa); pegue-os nas paginas do mod original.
+O script CLEO (.cs) original NAO esta neste pacote; o FaunaSA o substitui. Os sons .mp3 dos animais estao incluidos.

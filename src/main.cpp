@@ -6,6 +6,10 @@
 #include "CFont.h"
 #include "CSprite2d.h"
 #include "CAnimBlendHierarchy.h"
+#include "CPlayerInfo.h"
+#include "CHud.h"
+#include "CDraw.h"
+#include "CWaterLevel.h"
 #include "CAnimManager.h"
 #include "ePedAnims.h"
 #include "CCivilianPed.h"
@@ -26,6 +30,7 @@
 #include "CWeapon.h"
 #include "CWorld.h"
 #include "ai.hpp"
+#include "audio.hpp"
 #include "ifp.hpp"
 #include "pool.hpp"
 #include <cstdarg>
@@ -55,10 +60,18 @@ struct ModelRef {
     unsigned requestedAt = 0;
 };
 
+// Sons .mp3 do mito, como o script original os procura na pasta do animal: spawn.mp3, damage.mp3, random.mp3 + random_0..9,
+// anim_0..9 (tocados no ataque).
+struct Sounds {
+    std::string spawn, damage;
+    std::vector<std::string> random, attack;
+};
+
 struct Myth {
     std::string name;
     mm::MythConfig cfg;
     std::vector<ModelRef> models;
+    Sounds snd;
 };
 
 // Animacoes do grupo (Boar, dog...), carregadas por nos a partir do .ifp, sem registrar bloco no jogo.
@@ -84,6 +97,7 @@ struct Slot {
     mm::Move move = mm::Move::Idle;
     float lastHealth = 0;
     float heading = 0;
+    unsigned nextRandomSound = 0, lastDamageSound = 0;
 };
 
 std::vector<Myth> gMyths;
@@ -164,6 +178,18 @@ DWORD WINAPI Watchdog(LPVOID) {
 
 bool FileExists(const std::string& p) { return GetFileAttributesA(p.c_str()) != INVALID_FILE_ATTRIBUTES; }
 
+void ScanSounds(Myth& m, const std::string& dir) {
+    auto has = [&](const std::string& f) { return FileExists(dir + f); };
+    if (has("spawn.mp3")) m.snd.spawn = dir + "spawn.mp3";
+    if (has("damage.mp3")) m.snd.damage = dir + "damage.mp3";
+    if (has("random.mp3")) m.snd.random.push_back(dir + "random.mp3");
+    for (int i = 0; i < 10; ++i) {
+        std::string r = "random_" + std::to_string(i) + ".mp3", a = "anim_" + std::to_string(i) + ".mp3";
+        if (has(r)) m.snd.random.push_back(dir + r);
+        if (has(a)) m.snd.attack.push_back(dir + a);
+    }
+}
+
 // Nomes de modelo da pasta: A<n>_<k>/M<n>_<k> (como o script original) ou, se nao houver, o nome da pasta.
 void FindModels(Myth& m, const std::string& dir, char prefix) {
     WIN32_FIND_DATAA fd;
@@ -211,6 +237,7 @@ void LoadDir(const char* sub, char prefix) {
         std::string dir = base + m.name + "\\";
         if (!mm::MythConfig::load(dir + m.name + ".ini", m.cfg)) continue;
         FindModels(m, dir, prefix);
+        ScanSounds(m, dir);
         ApplyAnimMap(m);
         if (m.models.empty()) { Log("%s: sem .dff/.txd, ignorado", m.name.c_str()); continue; }
         gMyths.push_back(std::move(m));
@@ -347,7 +374,7 @@ void IndexAnimFiles() {
 // descomprimidos aqui, uma vez: o jogo escolhe o formato de update por clump (nao por animacao), entao uma
 // animacao "mantida comprimida" misturada com as de humano do ped trava o jogo, e a descompressao do proprio
 // jogo (cache + free de blocos) corrompia o heap com animacoes que nao estao nas tabelas dele.
-CAnimBlendHierarchy* BuildHierarchy(const mm::IfpAnim& a, int blockId) {
+CAnimBlendHierarchy* BuildHierarchy(const mm::IfpAnim& a, int blockId, bool flatten = true) {
     auto* h = new CAnimBlendHierarchy();
     h->SetName(a.name.c_str());
     h->m_bRunningCompressed = 0; // m_bIsCompressed: os dados ja estao descomprimidos
@@ -365,7 +392,7 @@ CAnimBlendHierarchy* BuildHierarchy(const mm::IfpAnim& a, int blockId) {
         seq.SetName(q.name.c_str());
         if (q.boneTag != -1) seq.SetBoneTag(q.boneTag);
         mm::uncompressKeyFrames(q, chunk + off);
-        mm::flattenRootXY(chunk + off, q.frameType, q.numFrames); // andar e com a IA; a animacao fica no lugar
+        if (flatten) mm::flattenRootXY(chunk + off, q.frameType, q.numFrames); // andar e com a IA; a animacao fica no lugar
         seq.SetNumFrames((int)q.numFrames, q.frameType == 2 || q.frameType == 4, false, chunk + off);
         off += mm::uncompressedKeyFrameSize(q.frameType) * q.numFrames;
     }
@@ -428,6 +455,16 @@ CPed* FindTarget(const Slot& me, const CVector& pos, float range, bool attacksAn
     return best;
 }
 
+// Toca um som na posicao do animal: volume do menu de efeitos do jogo x distancia ao jogador.
+void PlayAt(const std::string& file, const CVector& pos, float gain = 1.0f) {
+    CPed* pl = FindPlayerPed();
+    if (file.empty() || !pl) return;
+    CVector d = pos - pl->GetPosition();
+    snd::play(file, snd::sfxVolume() * gain * snd::falloff(std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z)));
+}
+
+const std::string& PickOne(const std::vector<std::string>& v) { return v[(size_t)rand() % v.size()]; }
+
 float WrapAngle(float a) { while (a > 3.14159265f) a -= 6.2831853f; while (a < -3.14159265f) a += 6.2831853f; return a; }
 
 // Um passo da IA por frame para cada animal: decide, gira, anda (a nossa fisica, na altura do chao) e toca a animacao.
@@ -464,6 +501,12 @@ void UpdateAnimals(unsigned now) {
         w.now = now; w.x = pos.x; w.y = pos.y;
         w.hurt = s.lastHealth > 0 && s.ped->m_fHealth < s.lastHealth - 0.5f;
         s.lastHealth = s.ped->m_fHealth;
+        const Sounds& sd = gMyths[s.myth].snd;
+        if (w.hurt && now - s.lastDamageSound > 1500) { s.lastDamageSound = now; PlayAt(sd.damage, pos); }
+        if (now >= s.nextRandomSound) { // sons aleatorios a cada 8-25 s, so se o jogador estiver por perto
+            if (s.nextRandomSound && !sd.random.empty()) PlayAt(PickOne(sd.random), pos, 0.8f);
+            s.nextRandomSound = now + 8000 + (unsigned)(17000 * mm::rnd01());
+        }
         if (player) {
             CVector pp = player->GetPosition();
             w.playerX = pp.x; w.playerY = pp.y;
@@ -512,6 +555,7 @@ void UpdateAnimals(unsigned now) {
         if (out.attack && target && CPools::ms_pPedPool->IsObjectValid(target)) {
             CWeapon::GenerateDamageEvent(target, s.ped, WEAPONTYPE_UNARMED, (int)(c.damage * 0.5f), (ePedPieceTypes)3, 0);
             Log("%s ataca (dano %d)", gMyths[s.myth].name.c_str(), (int)(c.damage * 0.5f));
+            if (!sd.attack.empty()) PlayAt(PickOne(sd.attack), pos);
         }
 
         // Animacao conforme o movimento; sem a de andar/correr do grupo, cai na mais parecida.
@@ -607,6 +651,7 @@ bool SpawnAt(int mi, const ModelRef& model, const CVector& pos, float angleDeg) 
     ns.lastHealth = ped->m_fHealth;
     ns.brain.homeX = pos.x; ns.brain.homeY = pos.y;
     ns.brain.stateUntil = gLastNowForSpawn + 1000 + (unsigned)(3000 * mm::rnd01());
+    PlayAt(gMyths[mi].snd.spawn, CVector(pos.x, pos.y, pos.z), 0.8f);
     return true;
 }
 
@@ -653,19 +698,25 @@ std::string Label(const Myth& m) {
 
 void Toast(const std::string& t, unsigned now) { gToast = t; gToastUntil = now + 3000; }
 
+#include "horse.hpp"
+
+
 void DebugKey(CPed* player, unsigned now) {
     static bool prev[6] = {};
     const int keys[6] = { VK_F9, VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_RETURN };
     bool down[6], hit[6];
     for (int k = 0; k < 6; ++k) { down[k] = KeyPressed(keys[k]); hit[k] = down[k] && !prev[k]; prev[k] = down[k]; }
     if (hit[0]) gMenuOpen = !gMenuOpen;
-    int n = (int)gMyths.size();
+    int n = (int)gMyths.size() + 1; // entrada 0 = Cavalo; as demais = mitos
     if (gMenuOpen && n) {
         if (hit[1]) gSel = (gSel + n - 1) % n;
         if (hit[2]) gSel = (gSel + 1) % n;
         if (hit[3]) gSel = std::max(0, gSel - 10);
         if (hit[4]) gSel = std::min(n - 1, gSel + 10);
-        if (hit[5]) { gF9Want = gSel; Log("menu: pedindo %s", gMyths[gSel].name.c_str()); }
+        if (hit[5]) {
+            if (gSel == 0) SpawnHorseAhead(player, now);
+            else { gF9Want = gSel - 1; Log("menu: pedindo %s", gMyths[gSel - 1].name.c_str()); }
+        }
     }
     if (gF9Want < 0) return;
     ModelRef& r = gMyths[gF9Want].models[0];
@@ -694,14 +745,14 @@ void DrawMenu() {
     if (!gToast.empty() && now < gToastUntil) text(20, 410, gToast, CRGBA(255, 220, 80, 255), 0.6f);
     if (!gMenuOpen) return;
     constexpr int kRows = 12;
-    int n = (int)gMyths.size();
+    int n = (int)gMyths.size() + 1;
     CSprite2d::DrawRect(CRect(14 * sx, 60 * sy, 300 * sx, (60 + 30 + kRows * 17 + 22) * sy), CRGBA(0, 0, 0, 170));
     text(20, 64, "FaunaSA - spawn de teste", CRGBA(255, 255, 255, 255), 0.6f);
     int first = std::clamp(gSel - kRows / 2, 0, std::max(0, n - kRows));
     for (int i = 0; i < kRows && first + i < n; ++i) {
         int k = first + i;
         bool sel = k == gSel;
-        text(24, 90 + i * 17, (sel ? "> " : "  ") + Label(gMyths[k]), sel ? CRGBA(120, 255, 120, 255) : CRGBA(220, 220, 220, 255), 0.5f);
+        text(24, 90 + i * 17, (sel ? "> " : "  ") + (k == 0 ? std::string("Cavalo (cavalgavel)") : Label(gMyths[k - 1])), sel ? CRGBA(120, 255, 120, 255) : CRGBA(220, 220, 220, 255), 0.5f);
     }
     text(20, 90 + kRows * 17 + 4, "Setas/PgUp/PgDn: escolher   Enter: spawnar   F9: fechar   (" + std::to_string(gSel + 1) + "/" + std::to_string(n) + ")", CRGBA(180, 180, 180, 255), 0.4f);
 }
@@ -743,7 +794,7 @@ void OnProcess() {
     unsigned now = CTimer::m_snTimeInMilliseconds;
     gLastNowForSpawn = now;
     CPad* pad = CPad::GetPad(0);
-    bool ready = pad && !pad->DisablePlayerControls && !CCutsceneMgr::ms_running && !CCutsceneMgr::ms_cutsceneLoadStatus && !CCutsceneMgr::ms_cutsceneProcessing;
+    bool ready = pad && (!pad->DisablePlayerControls || gRiding) && !CCutsceneMgr::ms_running && !CCutsceneMgr::ms_cutsceneLoadStatus && !CCutsceneMgr::ms_cutsceneProcessing;
     if (!ready) { gReadySince = 0; return; }
     if (!gReadySince) gReadySince = now ? now : 1;
     if (now - gReadySince < kReadyMs) return;
@@ -751,8 +802,11 @@ void OnProcess() {
     if (!player) return;
     DebugKey(player, now);
     DebugNearest(player);
+    snd::update();
     gStage = "UpdateAnimals";
     UpdateAnimals(now);
+    gStage = "UpdateHorses";
+    UpdateHorses(now, player);
     gStage = "tick";
     if (now < gNextTick) { gStage = "idle"; return; }
     gNextTick = now + kTickMs;
@@ -765,6 +819,7 @@ void OnProcess() {
 }
 
 void OnRestart() { // novo jogo/load: os ponteiros antigos e os IDs de modelo nao valem mais
+    ResetHorses();
     gSlots = {};
     gPool = mm::SlotPool<kMaxLive>{};
     for (auto& m : gMyths) {

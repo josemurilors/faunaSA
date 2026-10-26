@@ -16,7 +16,7 @@
 
 | | |
 | --- | --- |
-| **Versão** | 0.1 |
+| **Versão** | 0.2 |
 | **Estado** | Alfa: spawn, animação e IA básica funcionam na instalação do autor; falta a paridade com o mod original (seção 7) |
 | **Contexto** | Projeto pessoal de modding, feito a partir da engenharia reversa do Myths Maker 2.7 |
 | **Alvo** | `gta_sa.exe` 1.0 US, com ASI Loader, Modloader e Open Limit Adjuster |
@@ -38,7 +38,7 @@
 
 ## Início rápido
 
-**Pacote pronto:** baixe `FaunaSA-v0.1.0.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
+**Pacote pronto:** baixe `FaunaSA-v0.2.0.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
 
 **A partir do código** (para quem já tem o mod original):
 
@@ -61,9 +61,9 @@ Carregue um save, espere uns 10 segundos com o controle ligado e aperte **F9**, 
 
 O Myths Maker roda como scripts CLEO: cada animal ativo é um script próprio, o carregamento de modelos trava o frame e o jogo fica pesado e instável com muitos animais. O FaunaSA lê **as mesmas pastas e `.ini`** do mod e roda como um único plugin C++ com tick único, pool fixo de peds e carga de modelo sem bloqueio.
 
-**Faz:** spawn nos locais dos `.ini` (raio, horário, quantidade), modelos por nome, animações próprias dos `.ifp`, IA básica (vagar, fugir, perseguir, morder).
+**Faz:** spawn nos locais dos `.ini` (raio, horário, quantidade), modelos por nome, animações próprias dos `.ifp`, IA básica (vagar, fugir, perseguir, morder), sons `.mp3` dos animais (aleatório, dano, ataque, spawn) e o **cavalo cavalgável** (adaptação do New Horse Mod de nadalao).
 
-**Não faz (ainda):** cavalo e interação, domesticar, sons, radar e mapa de vida selvagem, locais por dia da semana e clima, o caçador `Anim0`, menu dentro do jogo (seção 8).
+**Não faz (ainda):** interação com os animais, domesticar, radar e mapa de vida selvagem, locais por dia da semana e clima, o caçador `Anim0`, menu dentro do jogo (seção 8).
 
 ## 2. Arquitetura
 
@@ -115,6 +115,9 @@ FaunaSA/
 
 **Limitações:** só `gta_sa.exe` 1.0 US (endereços fixos); só os valores de `location mode = 2` (todos os locais) são tratados; `weather` é ignorado.
 
+### Cavalo
+Adaptação do [New Horse Mod](https://www.mixmods.com.br/2018/12/novo-mod-de-cavalo-by-nadalao/): nove cavalos nos mesmos locais do mod (nascem a 100 m, somem a 140 m depois de 60 s), vida 1500. Chegue a 3 m e aperte a tecla de **entrar no veículo** (a dica aparece na tela) para montar e de novo para desmontar. Dá para mirar e atirar do cavalo (com zoom ao mirar). Analógico/WASD: rumo e marcha (anda e depois corre); **tecla de correr**: galope; **tecla de pular**: pulo. Os arquivos do cavalo **não** vêm no pacote (a página do mod não informa termos de redistribuição): instale-os do seu New Horse Mod com `tools/install_horse.ps1`; sem eles o cavalo fica desligado; `[Horse] Enabled=0` no `FaunaSA.ini` também desliga. No **F9**, a primeira entrada spawna um cavalo à sua frente.
+
 ## 5. Resiliência e diagnóstico
 
 - **Log** `FaunaSA.log` na pasta do jogo: modelos pedidos e carregados, spawns, ataques, diagnóstico de movimento (`MOVE`, `ANIM`).
@@ -159,7 +162,9 @@ O `build.bat` já compila e roda `tests\test_config.exe` antes de gerar `out\Fau
 - [ ] Movimento fluido, sem deslizar os pés: correção de velocidade instalada, falta confirmar
 - [ ] Textura certa do animal amarelo-esverdeado: causa ainda não identificada
 - [ ] Animação dos 6 tipos sem `.ifp` (vaca, gorila, raposa, capivara, pato, galinha): IFPs procedurais gerados (pernas em pares, sem pata a pata; falta ver no jogo)
-- [ ] Paridade: cavalo, interação, domesticar, sons, radar, caçador, locais por dia, clima
+- [x] Sons dos animais (`random`, `damage`, `anim_N`, `spawn`) pelo `bass.dll` do jogo (sem teste no jogo)
+- [ ] Cavalo: nasce nos 9 locais do mod, monta/desmonta, anda, corre, galopa, pula, sons de casco (implementado; falta testar no jogo; sem garupa nem cavalo domável)
+- [ ] Paridade: interação, domesticar, radar, caçador, locais por dia, clima
 - [ ] Medição de desempenho contra o mod original
 - [ ] Ferramenta para criar animais e tecla para recarregar os `.ini`
 

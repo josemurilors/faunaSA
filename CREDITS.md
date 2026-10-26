@@ -21,8 +21,19 @@ Páginas do mod original (termos do autor: uso em outros projetos **com crédito
 ## O que é do FaunaSA e o que não é
 - **Do FaunaSA (MIT):** o plugin `FaunaSA.asi` (código em `src/`), `tools/gen_ifp.py` e os scripts de instalação.
 - **Gerado pelo FaunaSA a partir dos modelos originais:** as animações `Fauna*.ifp` e os `.dff` de vaca, raposa e capivara com as quatro patas em ossos próprios (mesma malha e texturas do original, só os pesos do skin foram reatribuídos). Continuam sendo obra derivada dos autores acima.
-- **Do original, sem alteração:** todos os demais modelos, texturas, `.ifp`, `.ini` e `animgrp.dat` do pacote. Os sons e o script `.cs` do Myths Maker **não** vão no pacote (o FaunaSA não os usa).
+- **Do original, sem alteração:** todos os demais modelos, texturas, `.ifp`, `.ini` e `animgrp.dat` do pacote. Os sons `.mp3` dos animais vão no pacote (o FaunaSA os toca); o script `.cs` do Myths Maker **não** vai.
 - `tests/fixtures/` traz cópias mínimas de arquivos do Myths Maker (`Anim37.ini`, `Boar.ifp`, `animgrp_boar.dat`) usadas só nos testes automáticos.
+
+## Cavalo: New Horse Mod
+O cavalo cavalgável do FaunaSA é uma adaptação, em ASI, do [Novo mod de cavalo by Nadalao](https://www.mixmods.com.br/2018/12/novo-mod-de-cavalo-by-nadalao/) (2018). O FaunaSA **reescreve a lógica** (locais, montar, andar, pular, sons) com base no script original; o modelo, a textura, as animações (`horse_animation.ifp`) e os sons são do mod original.
+
+| Quem | O que fez |
+| --- | --- |
+| **nadalao** | Autor do mod (script recriado do zero) |
+| **Junior_Djjr** | Correções no `.ifp` e no `.dff` do cavalo, nova textura do pano, correção da posição de morte, recorte dos áudios, testes e ajuda no script |
+| Pequeno e Retrkill0 | Variações para o PedFuncs |
+
+A página do mod não indica o autor do modelo original do cavalo nem traz termos de redistribuição; por isso os arquivos do cavalo **não** estão no repositório. Quem tiver o mod instala com `tools/install_horse.ps1`.
 
 ## Referência técnica
 [plugin-sdk](https://github.com/DK22Pac/plugin-sdk) (DK22Pac e comunidade), [gta-reversed](https://github.com/gta-reversed/gta-reversed) e o código aberto do [CLEO+](https://github.com/JuniorDjjr/CLEOPlus). O formato dos arquivos e as regras de spawn vêm da engenharia reversa do mod, para interoperar com ele.
