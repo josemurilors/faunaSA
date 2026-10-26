@@ -1,0 +1,26 @@
+FaunaSA v{VERSAO} - animais para GTA San Andreas, sem CLEO
+
+REQUISITOS
+- gta_sa.exe 1.0 US
+- ASI Loader, Modloader e Open Limit Adjuster (com PedModels = unlimited)
+
+INSTALACAO
+1. Remova o Myths Maker antigo se ele estiver instalado: Myths_Maker.cs (pasta cleo) e MythsMaker.asi.
+   O FaunaSA substitui o script; os dois nao podem rodar juntos.
+2. Extraia este zip na pasta do jogo, ao lado do gta_sa.exe, aceitando substituir arquivos.
+   (Ele cria/atualiza: FaunaSA.asi, FaunaSA.ini, cleo\Animals, cleo\Myths, modloader\Myths Maker.)
+3. Abra o jogo, carregue um save, espere uns 10 segundos com o controle ligado.
+4. F9 abre o menu de spawn de teste (setas escolhem, Enter spawna a sua frente, F9 fecha).
+   Os animais tambem nascem sozinhos nos locais dos .ini, conforme horario e distancia.
+
+SE ALGO DER ERRADO
+- O arquivo FaunaSA.log (na pasta do jogo) registra modelos, spawns e falhas.
+- Para desfazer: apague FaunaSA.asi, FaunaSA.ini, cleo\Animals\FaunaSA e modloader\Myths Maker.
+
+CREDITOS
+Os animais, modelos, texturas e animacoes sao do Myths Maker 2.7 / Animals Pack:
+nadalao (autor do mod), Tarzan_3 (animais e animacoes), Junior_Djjr (texturas, ExtraDir, CLEO+, vozes),
+e outros autores listados em CREDITS.md (incluido neste zip). Todo o credito pertence a eles.
+O FaunaSA (plugin ASI, gerador de animacoes) e de Jose Murilo R. Sabalo, licenca MIT (LICENSE).
+Codigo-fonte: https://github.com/josemurilors/faunaSA
+Os sons e o script CLEO originais NAO estao neste pacote (o FaunaSA nao os usa); pegue-os nas paginas do mod original.

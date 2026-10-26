@@ -1,0 +1,9 @@
+out/
+*.obj
+*.exp
+*.lib
+*.pdb
+*.ilk
+FaunaSA.log
+
+dist/
