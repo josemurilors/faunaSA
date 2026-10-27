@@ -18,17 +18,17 @@ def ot(n): return OT + '%s/%s_optimized' % (n, n)
 SPECS = [
     ('Anim90', 'Anim42', 'leao',          [PA + 'bmybu']),
     ('Anim91', 'Anim42', 'tigre',         [PA + 'swat']),
-    ('Anim92', 'Anim37', 'porco',         [PA + 'bmybe']),   # pose do javali: usa o grupo Boar (FaunaSA.ini: Anim92=Boar), nao gera
+    # Anim92 (porco, Pack bmybe) foi retirado a pedido
     ('Anim93', 'Anim14', 'flamingo',      [PA + 'wmyva']),
     ('Anim94', 'Anim68', 'caes grandes',  [ot(n) for n in ('hmybe', 'hmyst', 'hmycr', 'sbfyst', 'hmyri', 'omokung', 'bmyboun', 'bmori', 'wmymech', 'wmyplt')]),
     ('Anim95', 'Anim73', 'gatos',         [ot(n) for n in ('wmybp', 'bmyap', 'bmybe', 'male01', 'bmycr', 'bmyst')]),  # branco, laranja, malhado, malhado-laranja, preto, siames
     ('Anim96', 'Anim68', 'cao marrom',    [ot(n) for n in ('dwmolc1', 'dwmolc2', 'dwmylc1')]),
     # Anim97 (bulldogs: bmydj, wmybmx) e Anim101 (lagarto: Pack bmori) ficaram de fora: o gerador de animacao erra a pose deles (ave / 2 patas, velocidade 8 m/s)
-    ('Anim98', 'Anim68', 'cao rottweiler', [PA + 'WMYVA2']),
+    # Anim98 (rottweiler, Pack WMYVA2) tambem ficou de fora: as patas de tras nao tem pesos que o gerador consiga separar (perna solta no jogo)
     ('Anim99', 'Anim52', 'lobo',          [PA + 'bmycr']),
     ('Anim100', 'Anim57', 'urso preto',   [PA + 'hmybe']),
 ]
-NO_GEN = {'porco'}  # o gerador trata o porco como ave; ele usa o grupo Boar
+NO_GEN = set()  # rotulos que nao passam pelo gerador de animacao (usam um grupo existente do FaunaSA.ini)
 
 def md5(p): return hashlib.md5(open(p, 'rb').read()).hexdigest()
 

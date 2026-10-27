@@ -716,6 +716,7 @@ void TrySpawn(int mi, const CVector& pl, unsigned now) {
 }
 
 // Menu de teste: F9 abre/fecha; setas (ou PgUp/PgDn) escolhem, Enter spawna 4 m a frente do jogador.
+int gF9Variant = 0; // variante (raca/cor) sorteada no pedido do menu
 int gF9Want = -1; // mito pedido pelo menu, que nasce quando o modelo terminar de carregar
 bool gMenuOpen = false;
 int gSel = 0;
@@ -725,7 +726,9 @@ unsigned gToastUntil = 0;
 // Nome em portugues do bicho: pela pasta (os sem .ifp) ou pelo grupo de animacao original do mito.
 std::string Label(const Myth& m) {
     static const std::map<std::string, const char*> byFolder = { { "Anim4", "Vaca" }, { "Anim5", "Vaca" }, { "Anim6", "Avestruz" }, { "Anim7", "Ovelha" },
-        { "Anim8", "Pato" }, { "Anim9", "Gorila" }, { "Anim10", "Capivara" }, { "Anim11", "Raposa" }, { "Anim12", "Raposa" }, { "Anim14", "Galinha" } };
+        { "Anim8", "Pato" }, { "Anim9", "Gorila" }, { "Anim10", "Capivara" }, { "Anim11", "Raposa" }, { "Anim12", "Raposa" }, { "Anim14", "Galinha" },
+        { "Anim90", "Leao" }, { "Anim91", "Tigre" }, { "Anim93", "Flamingo" }, { "Anim94", "Caes grandes (varias racas)" },
+        { "Anim95", "Gatos (6 cores)" }, { "Anim96", "Cao marrom" }, { "Anim99", "Lobo" }, { "Anim100", "Urso preto" } };
     static const std::map<std::string, const char*> byGroup = { { "boar", "Javali" }, { "rabit", "Coelho" }, { "deer1", "Cervo" }, { "lion", "Leao" },
         { "wolf", "Lobo" }, { "bear", "Urso" }, { "dog", "Cao" }, { "cat", "Gato" } };
     auto f = byFolder.find(m.name);
@@ -733,6 +736,17 @@ std::string Label(const Myth& m) {
     auto g = byGroup.find(mm::lowerStr(m.cfg.customAnimGroup));
     if (g != byGroup.end()) return std::string(g->second) + " (" + m.name + ")";
     return m.name;
+}
+
+// Entradas do F9: uma por conjunto de modelos (os mitos com os mesmos arquivos, como os 15 leopardos, aparecem uma vez).
+std::vector<int> gMenu;
+void BuildMenu() {
+    if (!gMenu.empty()) return;
+    for (size_t i = 0; i < gMyths.size(); ++i) {
+        bool dup = false;
+        for (int j : gMenu) dup = dup || gMyths[j].models == gMyths[i].models;
+        if (!dup) gMenu.push_back((int)i);
+    }
 }
 
 void Toast(const std::string& t, unsigned now) { gToast = t; gToastUntil = now + 3000; }
@@ -746,7 +760,8 @@ void DebugKey(CPed* player, unsigned now) {
     bool down[6], hit[6];
     for (int k = 0; k < 6; ++k) { down[k] = KeyPressed(keys[k]); hit[k] = down[k] && !prev[k]; prev[k] = down[k]; }
     if (hit[0]) gMenuOpen = !gMenuOpen;
-    int n = (int)gMyths.size() + 1; // entrada 0 = Cavalo; as demais = mitos
+    BuildMenu();
+    int n = (int)gMenu.size() + 1; // entrada 0 = Cavalo; as demais = mitos (sem repeticao)
     if (gMenuOpen && n) {
         if (hit[1]) gSel = (gSel + n - 1) % n;
         if (hit[2]) gSel = (gSel + 1) % n;
@@ -754,14 +769,29 @@ void DebugKey(CPed* player, unsigned now) {
         if (hit[4]) gSel = std::min(n - 1, gSel + 10);
         if (hit[5]) {
             if (gSel == 0) SpawnHorseAhead(player, now);
-            else { gF9Want = gSel - 1; Log("menu: pedindo %s", gMyths[gSel - 1].name.c_str()); }
+            else {
+                gF9Want = gMenu[gSel - 1];
+                gF9Variant = rand() % (int)gMyths[gF9Want].models.size();
+                Log("menu: pedindo %s", gMyths[gF9Want].name.c_str());
+            }
         }
     }
     if (gF9Want < 0) return;
-    ModelRef& r = *gMyths[gF9Want].models[0];
+    ModelRef& r = *gMyths[gF9Want].models[gF9Variant];
     if (r.state == 3) { Toast("Falhou ao carregar o modelo de " + Label(gMyths[gF9Want]), now); gF9Want = -1; return; }
     if (!EnsureLoaded(r, now)) return;
     CVector p = player->TransformFromObjectSpace({ 0.0f, 4.0f, -1.0f }); // -1 m: chao sob o jogador
+    if (gPool.count() >= kMaxLive) { // pool cheio de animais soltos pelo mundo: o spawn pedido tira o mais distante
+        int farthest = -1;
+        float best = -1;
+        for (size_t i = 0; i < kMaxLive; ++i) {
+            if (!gPool.used((int)i) || !gSlots[i].ped) continue;
+            CVector d = gSlots[i].ped->GetPosition() - player->GetPosition();
+            float d2 = d.x * d.x + d.y * d.y;
+            if (d2 > best) { best = d2; farthest = (int)i; }
+        }
+        if (farthest >= 0) Release(farthest);
+    }
     bool ok = SpawnAt(gF9Want, r, p, 0.0f);
     Log("menu: %s %s", r.name.c_str(), ok ? "spawnado" : "falhou (pool cheio?)");
     Toast((ok ? "Spawnado: " : "Pool cheio, nao spawnou: ") + Label(gMyths[gF9Want]), now);
@@ -784,14 +814,15 @@ void DrawMenu() {
     if (!gToast.empty() && now < gToastUntil) text(20, 410, gToast, CRGBA(255, 220, 80, 255), 0.6f);
     if (!gMenuOpen) return;
     constexpr int kRows = 12;
-    int n = (int)gMyths.size() + 1;
+    BuildMenu();
+    int n = (int)gMenu.size() + 1;
     CSprite2d::DrawRect(CRect(14 * sx, 60 * sy, 300 * sx, (60 + 30 + kRows * 17 + 22) * sy), CRGBA(0, 0, 0, 170));
     text(20, 64, "FaunaSA - spawn de teste", CRGBA(255, 255, 255, 255), 0.6f);
     int first = std::clamp(gSel - kRows / 2, 0, std::max(0, n - kRows));
     for (int i = 0; i < kRows && first + i < n; ++i) {
         int k = first + i;
         bool sel = k == gSel;
-        text(24, 90 + i * 17, (sel ? "> " : "  ") + (k == 0 ? std::string("Cavalo (cavalgavel)") : Label(gMyths[k - 1])), sel ? CRGBA(120, 255, 120, 255) : CRGBA(220, 220, 220, 255), 0.5f);
+        text(24, 90 + i * 17, (sel ? "> " : "  ") + (k == 0 ? std::string("Cavalo (cavalgavel)") : Label(gMyths[gMenu[k - 1]])), sel ? CRGBA(120, 255, 120, 255) : CRGBA(220, 220, 220, 255), 0.5f);
     }
     text(20, 90 + kRows * 17 + 4, "Setas/PgUp/PgDn: escolher   Enter: spawnar   F9: fechar   (" + std::to_string(gSel + 1) + "/" + std::to_string(n) + ")", CRGBA(180, 180, 180, 255), 0.4f);
 }

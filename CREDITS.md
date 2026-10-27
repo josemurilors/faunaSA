@@ -21,7 +21,7 @@ Páginas do mod original (termos do autor: uso em outros projetos **com crédito
 ## Packs de animais extras (0.3.0)
 | Pacote | Autor | O que veio |
 | --- | --- | --- |
-| [Pack de animais](https://www.mixmods.com.br/2014/03/pack-de-animais/) (mixmods, 2014) | **kh gamer** (autor); post de Junior_Djjr | leão, tigre, porco, flamingo, lobo, urso preto e um cão (`WMYVA2`) |
+| [Pack de animais](https://www.mixmods.com.br/2014/03/pack-de-animais/) (mixmods, 2014) | **kh gamer** (autor); post de Junior_Djjr | leão, tigre, flamingo, lobo, urso preto  |
 | [Dog Pack](https://libertycity.net/files/gta-san-andreas/98286-dog-pack.html) (libertycity.net) | **Vadim Panenko** (pack); **StrideR** e **Ganic** (modelos); **KOT33** (skins) | cães grandes (Boxer, Dálmata, Doberman, Pastor, Bull, Malamute), cão marrom |
 | [Cat Pack](https://libertycity.net/files/gta-san-andreas/91485-cat-pack.html) (libertycity.net) | **Vadim Panenko** | gato em 6 cores |
 

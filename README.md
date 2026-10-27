@@ -16,7 +16,7 @@
 
 | | |
 | --- | --- |
-| **Versão** | 0.3.0 |
+| **Versão** | 0.3.1 |
 | **Estado** | Beta: spawn, animação, IA básica, cavalo e os animais extras (cães, gatos, lobo, urso, leão, tigre...) funcionam na instalação do autor; falta a paridade com o mod original (seção 7) |
 | **Contexto** | Projeto pessoal de modding, feito a partir da engenharia reversa do Myths Maker 2.7 |
 | **Alvo** | `gta_sa.exe` 1.0 US, com ASI Loader, Modloader e Open Limit Adjuster |
@@ -38,7 +38,7 @@
 
 ## Início rápido
 
-**Pacote pronto:** baixe `FaunaSA-v0.3.0.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`, onde já ficam `modloader` e `cleo`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader (`modloader\Myths Maker`). Não há mais nada para instalar. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
+**Pacote pronto:** baixe `FaunaSA-v0.3.1.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`, onde já ficam `modloader` e `cleo`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader (`modloader\Myths Maker`). Não há mais nada para instalar. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
 
 **A partir do código** (para quem já tem o mod original):
 
@@ -61,7 +61,7 @@ Carregue um save, espere uns 10 segundos com o controle ligado e aperte **F9**, 
 
 O Myths Maker roda como scripts CLEO: cada animal ativo é um script próprio, o carregamento de modelos trava o frame e o jogo fica pesado e instável com muitos animais. O FaunaSA lê **as mesmas pastas e `.ini`** do mod e roda como um único plugin C++ com tick único, pool fixo de peds e carga de modelo sem bloqueio.
 
-**Faz:** spawn nos locais dos `.ini` (raio, horário, quantidade), modelos por nome, animações próprias dos `.ifp`, IA básica (vagar, fugir, perseguir, morder), sons `.mp3` dos animais (aleatório, dano, ataque, spawn), o **cavalo cavalgável** (adaptação do New Horse Mod de nadalao) e, desde a 0.3.0, os **animais extras** dos packs externos: cães (10 raças grandes, cão marrom, rottweiler), gatos (6 cores), lobo, urso preto, leão, tigre, porco e flamingo (seção 4).
+**Faz:** spawn nos locais dos `.ini` (raio, horário, quantidade), modelos por nome, animações próprias dos `.ifp`, IA básica (vagar, fugir, perseguir, morder), sons `.mp3` dos animais (aleatório, dano, ataque, spawn), o **cavalo cavalgável** (adaptação do New Horse Mod de nadalao) e, desde a 0.3.0, os **animais extras** dos packs externos: cães (10 raças grandes, cão marrom), gatos (6 cores), lobo, urso preto, leão, tigre e flamingo (seção 4).
 
 **Não faz (ainda):** interação com os animais, domesticar, radar e mapa de vida selvagem, locais por dia da semana e clima, o caçador `Anim0`, menu dentro do jogo (seção 8).
 
@@ -115,18 +115,16 @@ FaunaSA/
 - **Menu de teste:** **F9** abre/fecha a lista de animais (setas ou PgUp/PgDn escolhem, **Enter** spawna à frente do jogador); **F8** grava no log os mitos mais próximos e a distância ao local.
 
 ### Animais extras (packs externos)
-`tools/import_pack.py` cria uma pasta `AnimNN` por animal (`Anim90` a `Anim100`, sem a `Anim97`) com uma variante `A<NN>_<k>` por raça ou cor, sorteada a cada spawn; o `.ini` vem de um animal parecido (mesmos locais, horário e comportamento). `tools/decimate_dff.py` reduz as malhas pesadas dos cães e gatos (60 mil triângulos) para 10 mil, mantendo UV e pesos de skin; os atlas de textura (256×256) vêm do pack já otimizado. As animações são geradas por `tools/gen_ifp.py` como as dos outros animais sem `.ifp`.
+`tools/import_pack.py` cria uma pasta `AnimNN` por animal (`Anim90` a `Anim100`, sem a `Anim92`, a `Anim97` e a `Anim98`) com uma variante `A<NN>_<k>` por raça ou cor, sorteada a cada spawn; o `.ini` vem de um animal parecido (mesmos locais, horário e comportamento). `tools/decimate_dff.py` reduz as malhas pesadas dos cães e gatos (60 mil triângulos) para 10 mil, mantendo UV e pesos de skin; os atlas de textura (256×256) vêm do pack já otimizado. As animações são geradas por `tools/gen_ifp.py` como as dos outros animais sem `.ifp`.
 
 | Pasta | Animal | Variantes |
 | --- | --- | --- |
 | `Anim90` | leão | 1 |
 | `Anim91` | tigre | 1 |
-| `Anim92` | porco (grupo `Boar`) | 1 |
 | `Anim93` | flamingo | 1 |
 | `Anim94` | cães grandes | 10 raças (Boxer, Dálmata, Doberman, Pastor, Bull, Malamute...) |
 | `Anim95` | gatos | 6 cores (branco, laranja, malhado, malhado-laranja, preto, siamês) |
 | `Anim96` | cão marrom | 3 |
-| `Anim98` | rottweiler | 1 |
 | `Anim99` | lobo | 1 |
 | `Anim100` | urso preto | 1 |
 
@@ -206,7 +204,7 @@ O FaunaSA só existe por causa do trabalho de outras pessoas. **Myths Maker** é
 - [Myths Maker 2.7 (libertycity.net)](https://libertycity.net/files/gta-san-andreas/182061-myths_maker-2.7-animal-world.html): termos do autor: uso em outros projetos com crédito, sem alterar splash, logo e descrição do mod original.
 - [Myths Maker – Animals Pack (mixmods)](https://www.mixmods.com.br/2022/10/myths-maker-animals-pack-mod-de-animais/)
 - [Myths Maker: criar mitos e lendas (mixmods)](https://www.mixmods.com.br/2022/10/myths-maker-criar-mitos-lendas/)
-- [Pack de animais (mixmods)](https://www.mixmods.com.br/2014/03/pack-de-animais/): autor kh gamer; leão, tigre, porco, flamingo, lobo e urso (o lagarto não entrou: a animação gerada não ficou boa).
+- [Pack de animais (mixmods)](https://www.mixmods.com.br/2014/03/pack-de-animais/): autor kh gamer; leão, tigre, flamingo, lobo e urso (o lagarto não entrou: a animação gerada não ficou boa).
 - [Dog Pack (libertycity.net)](https://libertycity.net/files/gta-san-andreas/98286-dog-pack.html): Vadim Panenko; modelos de StrideR e Ganic; skins por KOT33.
 - [Cat Pack (libertycity.net)](https://libertycity.net/files/gta-san-andreas/91485-cat-pack.html): Vadim Panenko.
 - [Texture Optimizer (gtastuff.com)](https://gtastuff.com/tools/texture-optimizer/): atlas de textura 256×256 dos cães e gatos.

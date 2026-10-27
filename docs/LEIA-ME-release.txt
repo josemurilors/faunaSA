@@ -24,8 +24,8 @@ SE ALGO DER ERRADO
 - O arquivo FaunaSA.log (na pasta do jogo) registra modelos, spawns e falhas.
 - Para desfazer: apague FaunaSA.asi, FaunaSA.ini, cleo\Animals\FaunaSA e modloader\Myths Maker.
 
-ANIMAIS EXTRAS (0.3.0): caes (10 racas, cao marrom, rottweiler), gatos (6 cores), lobo, urso preto, leao, tigre, porco e
-flamingo, pastas Anim90 a Anim100. Pack de animais (kh gamer), Dog Pack e Cat Pack (Vadim Panenko, StrideR, Ganic, KOT33). Detalhes e termos
+ANIMAIS EXTRAS (0.3.x): caes (10 racas, cao marrom), gatos (6 cores), lobo, urso preto, leao, tigre e
+flamingo, pastas Anim90 a Anim100 (sem Anim92, 97 e 98). Pack de animais (kh gamer), Dog Pack e Cat Pack (Vadim Panenko, StrideR, Ganic, KOT33). Detalhes e termos
 em CREDITS.md; se voce e autor e quer a remocao, abra uma issue no repositorio.
 
 CREDITOS
