@@ -9,6 +9,7 @@ INSTALACAO
    O FaunaSA substitui o script; os dois nao podem rodar juntos.
 2. Extraia este zip na pasta do jogo, ao lado do gta_sa.exe, aceitando substituir arquivos.
    (Ele cria/atualiza: FaunaSA.asi, FaunaSA.ini, cleo\Animals, cleo\Myths, modloader\Myths Maker.)
+   Nao ha mais nada para instalar: modelos, animacoes e sons ja vao prontos.
 3. Abra o jogo, carregue um save, espere uns 10 segundos com o controle ligado.
 4. F9 abre o menu de spawn de teste (setas escolhem, Enter spawna a sua frente, F9 fecha).
    Os animais tambem nascem sozinhos nos locais dos .ini, conforme horario e distancia.
@@ -22,6 +23,10 @@ CAVALO (opcional)
 SE ALGO DER ERRADO
 - O arquivo FaunaSA.log (na pasta do jogo) registra modelos, spawns e falhas.
 - Para desfazer: apague FaunaSA.asi, FaunaSA.ini, cleo\Animals\FaunaSA e modloader\Myths Maker.
+
+ANIMAIS EXTRAS (0.3.0): caes (10 racas, cao marrom, rottweiler), gatos (6 cores), lobo, urso preto, leao, tigre, porco e
+flamingo, pastas Anim90 a Anim100. Pack de animais (kh gamer), Dog Pack e Cat Pack (Vadim Panenko, StrideR, Ganic, KOT33). Detalhes e termos
+em CREDITS.md; se voce e autor e quer a remocao, abra uma issue no repositorio.
 
 CREDITOS
 Os animais, modelos, texturas e animacoes sao do Myths Maker 2.7 / Animals Pack:

@@ -10,6 +10,7 @@
 #include "CHud.h"
 #include "CDraw.h"
 #include "CCamera.h"
+#include "CWeaponInfo.h"
 #include "CWaterLevel.h"
 #include "CAnimManager.h"
 #include "ePedAnims.h"
@@ -40,6 +41,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <deque>
+#include <fstream>
 #include <map>
 #include <string>
 
@@ -60,6 +64,8 @@ struct ModelRef {
     int id = -1;
     int state = 0; // 0 nao pedido, 1 pedido, 2 carregado, 3 falhou
     unsigned requestedAt = 0;
+    std::string dff, txd;     // arquivos, para reconhecer o mesmo modelo em pastas diferentes
+    long long dffSize = 0, txdSize = 0;
 };
 
 // Sons .mp3 do mito, como o script original os procura na pasta do animal: spawn.mp3, damage.mp3, random.mp3 + random_0..9,
@@ -72,7 +78,7 @@ struct Sounds {
 struct Myth {
     std::string name;
     mm::MythConfig cfg;
-    std::vector<ModelRef> models;
+    std::vector<ModelRef*> models; // aponta para gModels (compartilhado entre mitos com o mesmo arquivo)
     Sounds snd;
 };
 
@@ -103,6 +109,7 @@ struct Slot {
 };
 
 std::vector<Myth> gMyths;
+std::deque<ModelRef> gModels; // um por modelo distinto (conteudo dos arquivos); enderecos estaveis
 std::array<Slot, kMaxLive> gSlots;
 mm::SlotPool<kMaxLive> gPool;
 bool gLoaded = false;
@@ -192,6 +199,35 @@ void ScanSounds(Myth& m, const std::string& dir) {
     }
 }
 
+long long FileSize(const std::string& p) {
+    WIN32_FILE_ATTRIBUTE_DATA d;
+    if (!GetFileAttributesExA(p.c_str(), GetFileExInfoStandard, &d)) return -1;
+    return ((long long)d.nFileSizeHigh << 32) | d.nFileSizeLow;
+}
+
+bool SameBytes(const std::string& a, const std::string& b) { // so chamado com tamanhos iguais
+    std::ifstream fa(a, std::ios::binary), fb(b, std::ios::binary);
+    static char x[1 << 16], y[1 << 16];
+    while (fa && fb) {
+        fa.read(x, sizeof x); fb.read(y, sizeof y);
+        if (fa.gcount() != fb.gcount() || std::memcmp(x, y, (size_t)fa.gcount()) != 0) return false;
+    }
+    return true;
+}
+
+// Raposa, leopardo, lobo, cachorro... aparecem em varias pastas (comportamento/locais diferentes) com o mesmo .dff/.txd.
+// Cada copia ocuparia um ID de modelo e uma carga propria na memoria: reaproveita o primeiro modelo identico.
+ModelRef* SharedModel(const std::string& dir, const std::string& n) {
+    std::string dff = dir + n + ".dff", txd = dir + n + ".txd";
+    long long ds = FileSize(dff), ts = FileSize(txd);
+    for (auto& r : gModels)
+        if (r.dffSize == ds && r.txdSize == ts && SameBytes(r.dff, dff) && SameBytes(r.txd, txd)) return &r;
+    ModelRef r{ n };
+    r.dff = dff; r.txd = txd; r.dffSize = ds; r.txdSize = ts;
+    gModels.push_back(std::move(r));
+    return &gModels.back();
+}
+
 // Nomes de modelo da pasta: A<n>_<k>/M<n>_<k> (como o script original) ou, se nao houver, o nome da pasta.
 void FindModels(Myth& m, const std::string& dir, char prefix) {
     WIN32_FIND_DATAA fd;
@@ -206,7 +242,10 @@ void FindModels(Myth& m, const std::string& dir, char prefix) {
         if ((n[0] == prefix || n[0] == prefix + 32) && n.find('_') != std::string::npos) variants.push_back(n);
     } while (FindNextFileA(h, &fd));
     FindClose(h);
-    for (auto& n : variants.empty() ? all : variants) m.models.push_back({ n });
+    for (auto& n : variants.empty() ? all : variants) {
+        ModelRef* r = SharedModel(dir, n);
+        if (std::find(m.models.begin(), m.models.end(), r) == m.models.end()) m.models.push_back(r);
+    }
 }
 
 // Grupos de animacao para animais que nao trazem .ifp proprio (analise em docs/ESQUELETOS.md). O FaunaSA.ini do jogo,
@@ -585,18 +624,16 @@ constexpr int kMaxResident = 16; // modelos de mito carregados ao mesmo tempo, s
 // Solta modelos sem uso quando passam do limite, como o UNLOAD_SPECIAL_CHARACTER_FROM_ID do CLEO+.
 void ReleaseUnusedModels() {
     int resident = 0;
-    for (auto& m : gMyths) for (auto& r : m.models) resident += r.state == 2;
-    for (auto& m : gMyths) {
-        for (auto& r : m.models) {
-            if (resident <= kMaxResident) return;
-            if (r.state != 2) continue;
-            CBaseModelInfo* mi = CModelInfo::GetModelInfo(r.id);
-            if (!mi || mi->m_nRefCount != 0) continue; // ainda ha animal usando
-            CStreaming::SetMissionDoesntRequireModel(r.id);
-            CStreaming::RemoveModel(r.id);
-            r.state = 0; // pedido de novo se precisar (o ID de modelo ja existe, so o recurso e recarregado)
-            --resident;
-        }
+    for (auto& r : gModels) resident += r.state == 2;
+    for (auto& r : gModels) {
+        if (resident <= kMaxResident) return;
+        if (r.state != 2) continue;
+        CBaseModelInfo* mi = CModelInfo::GetModelInfo(r.id);
+        if (!mi || mi->m_nRefCount != 0) continue; // ainda ha animal usando
+        CStreaming::SetMissionDoesntRequireModel(r.id);
+        CStreaming::RemoveModel(r.id);
+        r.state = 0; // pedido de novo se precisar (o ID de modelo ja existe, so o recurso e recarregado)
+        --resident;
     }
 }
 
@@ -664,7 +701,7 @@ void TrySpawn(int mi, const CVector& pl, unsigned now) {
     if (LiveOf(mi) >= c.quantity) return;
     int loc = mm::findLocation(c, pl.x, pl.y, pl.z);
     if (loc < 0) return;
-    ModelRef& model = m.models[rand() % m.models.size()];
+    ModelRef& model = *m.models[rand() % m.models.size()];
     if (!EnsureLoaded(model, now)) return; // pede e volta no proximo tick: nao trava o frame
     // Como o original: cada animal nasce espalhado em volta do local, na altura real do chao. Se a colisao do
     // ponto ainda nao carregou (local longe), tenta de novo no proximo tick em vez de nascer no ar.
@@ -721,7 +758,7 @@ void DebugKey(CPed* player, unsigned now) {
         }
     }
     if (gF9Want < 0) return;
-    ModelRef& r = gMyths[gF9Want].models[0];
+    ModelRef& r = *gMyths[gF9Want].models[0];
     if (r.state == 3) { Toast("Falhou ao carregar o modelo de " + Label(gMyths[gF9Want]), now); gF9Want = -1; return; }
     if (!EnsureLoaded(r, now)) return;
     CVector p = player->TransformFromObjectSpace({ 0.0f, 4.0f, -1.0f }); // -1 m: chao sob o jogador
@@ -824,9 +861,7 @@ void OnRestart() { // novo jogo/load: os ponteiros antigos e os IDs de modelo na
     ResetHorses();
     gSlots = {};
     gPool = mm::SlotPool<kMaxLive>{};
-    for (auto& m : gMyths) {
-        for (auto& r : m.models) r = ModelRef{ r.name };
-    }
+    for (auto& r : gModels) { r.id = -1; r.state = 0; r.requestedAt = 0; }
 }
 
 struct Main {

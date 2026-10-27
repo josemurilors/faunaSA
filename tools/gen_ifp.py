@@ -461,6 +461,8 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     do_prev = '--preview' in sys.argv
     src, dst, folders = args[0], args[1], args[2:] or ['Anim4', 'Anim5', 'Anim6', 'Anim8', 'Anim9', 'Anim10', 'Anim11', 'Anim12', 'Anim14']
+    lst = os.path.join(src, 'FaunaSA', 'imported.txt')  # pastas criadas por import_pack.py
+    if len(args) <= 2 and os.path.exists(lst): folders += open(lst).read().split()
     os.makedirs(os.path.join(dst, 'models'), exist_ok=True)
     grp = ['# gerado por tools/gen_ifp.py' + chr(10)]
     for folder in folders:
@@ -476,7 +478,8 @@ def main():
             fp = os.path.join(d, fname)
             if not plan: return read_model(fp)
             out = os.path.join(dst, 'models', fname)
-            patch_legs(read_model(fp), plan, out)
+            mv = read_model(fp)
+            patch_legs(mv, plan_legs(mv) or plan, out)  # pivos de cada raca/variante (a silhueta muda de uma para outra)
             return read_model(out)
         m = prepare(os.path.basename(path))
         todo = [(folder, path, m)]

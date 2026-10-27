@@ -114,8 +114,9 @@ struct MythConfig {
         // Locais sao numerados a partir de 1, sem buracos.
         for (int i = 1; ini.has("LOCATIONS", "location " + std::to_string(i) + " x"); ++i) {
             std::string p = "location " + std::to_string(i) + " ";
-            out.locations.push_back({ ini.real("LOCATIONS", p + "x"), ini.real("LOCATIONS", p + "y"),
-                                      ini.real("LOCATIONS", p + "z"), ini.real("LOCATIONS", p + "angle") });
+            Location l{ ini.real("LOCATIONS", p + "x"), ini.real("LOCATIONS", p + "y"), ini.real("LOCATIONS", p + "z"), ini.real("LOCATIONS", p + "angle") };
+            if (l.x == 0 && l.y == 0 && l.z == 0) continue; // vaga nao preenchida do .ini (0,0,0 e a fazenda Blueberry)
+            out.locations.push_back(l);
         }
         return true;
     }

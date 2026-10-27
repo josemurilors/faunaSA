@@ -100,5 +100,6 @@ int main(int argc, char** argv) {
         assert(std::fabs(mm::aimExcess(1.5f, lim) - (1.5f - lim)) < 1e-5f && std::fabs(mm::aimExcess(-1.5f, lim) + (1.5f - lim)) < 1e-5f);
         assert(mm::aimExcess(3.0f, 0.0f) == 0.0f); // limite 0 = desligado
     }
+    for (auto& l : c.locations) assert(!(l.x == 0 && l.y == 0 && l.z == 0));
     std::printf("ok: %zu locais\n", c.locations.size());
 }
