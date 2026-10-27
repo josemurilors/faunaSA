@@ -49,6 +49,19 @@ inline int nearestLocation(const MythConfig& c, float px, float py, float pz, fl
 // O script original ativa o mito quando o jogador esta a "raio do local + 120" do local (o raio padrao e o spawn radius).
 inline float activationRadius(const MythConfig& c) { return c.spawnRadius + 120.0f; }
 
+// Cidades do jogo (limites de zona do SA): Los Santos, San Fierro e Las Venturas. O resto (Red/Flint/Bone County, florestas, desertos) e rural.
+inline bool isUrban(float x, float y) {
+    struct Rect { float x1, y1, x2, y2; };
+    static const Rect cities[] = { { 44.6f, -2893.0f, 2997.0f, -768.0f }, { -2997.0f, -1115.6f, -1213.9f, 1659.7f }, { 869.5f, 596.3f, 2997.0f, 2993.9f } };
+    for (const Rect& r : cities) if (x >= r.x1 && x <= r.x2 && y >= r.y1 && y <= r.y2) return true;
+    return false;
+}
+
+// myth quantity do .ini vezes a escala da zona, arredondado (0 desliga o mito naquela zona).
+inline int scaledQuantity(int quantity, bool urban, float urbanScale, float ruralScale) {
+    return (int)std::floor((float)quantity * (urban ? urbanScale : ruralScale) + 0.5f);
+}
+
 // Local ativado pelo jogador, ou -1.
 inline int findLocation(const MythConfig& c, float px, float py, float pz) {
     float d;

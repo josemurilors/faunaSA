@@ -33,6 +33,11 @@ def main():
                 add(os.path.join(horse, f), arc)
             for f in sorted(os.listdir(os.path.join(horse, 'cleo', 'cleo_audio'))):
                 if f.lower().endswith('.mp3'): add(os.path.join(horse, 'cleo', 'cleo_audio', f), 'FaunaSA/horse/' + f)
+        if not horse:  # cavalo ja instalado no jogo (modloader\FaunaSA e FaunaSA\horse)
+            for sub in ('modloader/FaunaSA', 'FaunaSA/horse'):
+                for d, _, fs in os.walk(os.path.join(jogo, *sub.split('/'))):
+                    for f in sorted(fs):
+                        if f.lower().endswith(KEEP): add(os.path.join(d, f), os.path.relpath(os.path.join(d, f), jogo))
         for f in ('CREDITS.md', 'LICENSE'):
             add(os.path.join(raiz, f), f)
         z.writestr('LEIA-ME.txt', open(os.path.join(raiz, 'docs', 'LEIA-ME-release.txt'), encoding='utf-8').read().replace('{VERSAO}', ver))

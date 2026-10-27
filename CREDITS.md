@@ -46,7 +46,7 @@ O cavalo cavalgável do FaunaSA é uma adaptação, em ASI, do [Novo mod de cava
 | **Junior_Djjr** | Correções no `.ifp` e no `.dff` do cavalo, nova textura do pano, correção da posição de morte, recorte dos áudios, testes e ajuda no script |
 | Pequeno e Retrkill0 | Variações para o PedFuncs |
 
-A página do mod não indica o autor do modelo original do cavalo nem traz termos de redistribuição; por isso os arquivos do cavalo **não** estão no repositório. Quem tiver o mod instala com `tools/install_horse.ps1`.
+A página do mod não indica o autor do modelo original do cavalo nem traz termos de redistribuição. Os arquivos do cavalo (modelo, textura, animações e sons) **não** estão no repositório, só no pacote da release (1.0.0 em diante), com os créditos acima e sem alteração; serão removidos a pedido de qualquer autor (abra uma issue). Quem monta a partir do código instala os seus com `tools/install_horse.ps1`.
 
 ## Referência técnica
 [plugin-sdk](https://github.com/DK22Pac/plugin-sdk) (DK22Pac e comunidade), [gta-reversed](https://github.com/gta-reversed/gta-reversed) e o código aberto do [CLEO+](https://github.com/JuniorDjjr/CLEOPlus). O formato dos arquivos e as regras de spawn vêm da engenharia reversa do mod, para interoperar com ele.

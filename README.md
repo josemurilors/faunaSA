@@ -9,19 +9,19 @@
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-em_desenvolvimento-yellow" alt="Status">
+  <img src="https://img.shields.io/badge/status-est%C3%A1vel_1.0-green" alt="Status">
   <img src="https://img.shields.io/badge/GTA_SA-1.0_US-blue" alt="Jogo">
   <img src="https://img.shields.io/badge/stack-C%2B%2B_%7C_plugin--sdk_%7C_ASI-blueviolet" alt="Stack">
 </p>
 
 | | |
 | --- | --- |
-| **Versão** | 0.3.1 |
-| **Estado** | Beta: spawn, animação, IA básica, cavalo e os animais extras (cães, gatos, lobo, urso, leão, tigre...) funcionam na instalação do autor; falta a paridade com o mod original (seção 7) |
+| **Versão** | 1.0.0 |
+| **Estado** | Estável (1.0): spawn, animação, IA básica, população por zona, buzina, cavalo e os animais extras funcionam na instalação do autor; falta a paridade com o mod original e há problemas conhecidos (seção 7) |
 | **Contexto** | Projeto pessoal de modding, feito a partir da engenharia reversa do Myths Maker 2.7 |
 | **Alvo** | `gta_sa.exe` 1.0 US, com ASI Loader, Modloader e Open Limit Adjuster |
 
-> **Aviso:** o código deste repositório é MIT, mas os modelos, texturas e animações dos animais **não são meus**: são do Myths Maker 2.7 / Animals Pack (nadalao, Tarzan_3, Junior_Djjr e outros), do *Dog Pack* e do *Cat Pack* (Vadim Panenko, StrideR e outros) e do *Pack de animais* (kh gamer). O pacote completo da [release](https://github.com/josemurilors/faunaSA/releases) os redistribui **com os créditos dos autores originais** ([CREDITS.md](CREDITS.md)); eles não estão no repositório (só o código). Os packs de cães, gatos e animais extras **não trazem licença explícita** nas páginas de origem: se você é autor e quer a remoção, abra uma issue. O FaunaSA **substitui** o script CLEO `Myths_Maker.cs`: os dois não podem rodar juntos.
+> **Aviso:** o código deste repositório é MIT, mas os modelos, texturas e animações dos animais **não são meus**: são do Myths Maker 2.7 / Animals Pack (nadalao, Tarzan_3, Junior_Djjr e outros), do *Dog Pack* e do *Cat Pack* (Vadim Panenko, StrideR e outros) e do *Pack de animais* (kh gamer). O pacote completo da [release](https://github.com/josemurilors/faunaSA/releases), que inclui também os arquivos do cavalo (New Horse Mod, de nadalao e outros, sem termos de redistribuição na página de origem), os redistribui **com os créditos dos autores originais** ([CREDITS.md](CREDITS.md)); eles não estão no repositório (só o código). Os packs de cães, gatos e animais extras **não trazem licença explícita** nas páginas de origem: se você é autor e quer a remoção, abra uma issue. O FaunaSA **substitui** o script CLEO `Myths_Maker.cs`: os dois não podem rodar juntos.
 
 ## Sumário
 
@@ -38,7 +38,7 @@
 
 ## Início rápido
 
-**Pacote pronto:** baixe `FaunaSA-v0.3.1.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`, onde já ficam `modloader` e `cleo`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader (`modloader\Myths Maker`). Não há mais nada para instalar. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
+**Pacote pronto:** baixe `FaunaSA-v1.0.0.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`, onde já ficam `modloader` e `cleo`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader (`modloader\Myths Maker`). Não há mais nada para instalar. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
 
 **A partir do código** (para quem já tem o mod original):
 
@@ -106,12 +106,14 @@ FaunaSA/
 
 ## 4. Regras e algoritmos
 
-- **Ativação** (do script original): o animal nasce quando você está a `spawn radius + 120` m (3D) de um local do `.ini`, dentro da janela `starting/ending hour`, abaixo de `myth quantity` e com o chão carregado. Nasce espalhado em volta do local, na altura real do chão. Máximo de 24 animais vivos.
+- **Ativação** (do script original): o animal nasce quando você está a `spawn radius + 120` m (3D) de um local do `.ini`, dentro da janela `starting/ending hour`, abaixo de `myth quantity` e com o chão carregado. Nasce espalhado em volta do local, na altura real do chão. Máximo de animais vivos configurável (`MaxLive`).
 - **Modelos:** `A<n>_<k>` / `M<n>_<k>` pelo nome, num ID livre de 15000 a 16000; no máximo 16 modelos sem uso ficam carregados. Pastas com `.dff`/`.txd` idênticos (raposa, leopardo, lobo, panda... repetidos em vários mitos) dividem **um só** modelo carregado (161 modelos do pacote original viram 52 distintos).
 - **Locais vazios:** vagas `x=0 y=0 z=0` dos `.ini` (não preenchidas; (0, 0) é a fazenda Blueberry) são ignoradas, como no mod original.
 - **Animação:** os `.ifp` (ANP3) são lidos pelo ASI e descomprimidos na carga, **fora** das tabelas do jogo (que têm no máximo 180 blocos e já costumam estar cheias). O deslocamento horizontal da raiz é zerado e a velocidade vem dele.
 - **IA:** vagar (`walk mode`), presas (cervo, coelho) fogem a menos de 15 m, atacantes (`attacks peds/animals`) perseguem o ped mais próximo a até 25 m e mordem a 2 m (dano = metade de `damage`, intervalo por `attack rate`).
 - **Animais sem `.ifp` próprio:** `FaunaSA.ini`, seção `[AnimGroups]`, mapeia a pasta para um grupo existente (padrão: ovelha → `Boar`). Os demais (vaca, avestruz, gorila, raposa, capivara, pato, galinha) usam IFPs gerados por `tools/gen_ifp.py` (passo 3 do início rápido); vaca, raposa e capivara também ganham um `.dff` com as quatro patas separadas. Sem os IFPs, o animal cai no andar/correr de humano do jogo; ver [docs/ESQUELETOS.md](docs/ESQUELETOS.md).
+- **População por zona:** `FaunaSA.ini`, `[Population]`: `UrbanScale` (padrão 0,3) e `RuralScale` (padrão 1,5) multiplicam o `myth quantity` do `.ini` conforme a zona do local onde o animal nasce (cidade = Los Santos, San Fierro e Las Venturas; o resto é campo/floresta); `MaxLive` (padrão 32, até 48) limita os animais vivos no mundo todo.
+- **Buzina:** com `[Horn] Enabled=1`, o motorista NPC de um carro em movimento buzina quando um cachorro ou gato (`Animals=all` vale para todos os animais) está na frente, até uns 8 m + 1,2 s de velocidade, e o animal corre para o lado depois de ~0,35 s. Não vale para o carro do jogador.
 - **Menu de teste:** **F9** abre/fecha a lista de animais (setas ou PgUp/PgDn escolhem, **Enter** spawna à frente do jogador); **F8** grava no log os mitos mais próximos e a distância ao local.
 
 ### Animais extras (packs externos)
@@ -131,7 +133,7 @@ FaunaSA/
 **Limitações:** só `gta_sa.exe` 1.0 US (endereços fixos); só os valores de `location mode = 2` (todos os locais) são tratados; `weather` é ignorado.
 
 ### Cavalo
-Adaptação do [New Horse Mod](https://www.mixmods.com.br/2018/12/novo-mod-de-cavalo-by-nadalao/): nove cavalos nos mesmos locais do mod (nascem a 100 m, somem a 140 m depois de 60 s), vida 1500. Chegue a 3 m e aperte a tecla de **entrar no veículo** (a dica aparece na tela) para montar e de novo para desmontar. Dá para mirar e atirar do cavalo (com zoom ao mirar; limite de abertura da mira experimental e desligado por padrão: `[Horse] AimLimit=150` no `FaunaSA.ini`). Analógico/WASD: rumo e marcha (anda e depois corre); **tecla de correr**: galope; **tecla de pular**: pulo. Os arquivos do cavalo **não** vêm no pacote (a página do mod não informa termos de redistribuição): instale-os do seu New Horse Mod com `tools/install_horse.ps1`; sem eles o cavalo fica desligado; `[Horse] Enabled=0` no `FaunaSA.ini` também desliga. No **F9**, a primeira entrada spawna um cavalo à sua frente.
+Adaptação do [New Horse Mod](https://www.mixmods.com.br/2018/12/novo-mod-de-cavalo-by-nadalao/): nove cavalos nos mesmos locais do mod (nascem a 100 m, somem a 140 m depois de 60 s), vida 1500. Chegue a 3 m e aperte a tecla de **entrar no veículo** (a dica aparece na tela) para montar e de novo para desmontar. Dá para mirar e atirar do cavalo (com zoom ao mirar; limite de abertura da mira experimental e desligado por padrão: `[Horse] AimLimit=150` no `FaunaSA.ini`). Analógico/WASD: rumo e marcha (anda e depois corre); **tecla de correr**: galope; **tecla de pular**: pulo. Os arquivos do cavalo (modelo, animações e sons do New Horse Mod) vão no pacote da release, com crédito ([CREDITS.md](CREDITS.md)); quem monta a partir do código instala os seus com `tools/install_horse.ps1`. Sem os arquivos o cavalo fica desligado; `[Horse] Enabled=0` no `FaunaSA.ini` também desliga. No **F9**, a primeira entrada spawna um cavalo à sua frente.
 
 ## 5. Resiliência e diagnóstico
 
@@ -179,6 +181,7 @@ O `build.bat` já compila e roda `tests\test_config.exe` antes de gerar `out\Fau
 - [ ] Animação dos 6 tipos sem `.ifp` (vaca, gorila, raposa, capivara, pato, galinha): IFPs procedurais gerados (pernas em pares, sem pata a pata; falta ver no jogo)
 - [x] Sons dos animais (`random`, `damage`, `anim_N`, `spawn`) pelo `bass.dll` do jogo (sem teste no jogo)
 - [ ] Animais extras (`Anim90`–`Anim100`): importados, com animações geradas e modelos reduzidos; falta ver no jogo (o leão tem uma perna e a cauda sem animação)
+- [ ] **Problema conhecido:** montado, as balas saem mais baixas que a mira (todas as armas); `[Horse] AlignGun=0` e o log `SHOTDIAG` do `FaunaSA.log` são o ponto de partida para corrigir
 - [ ] Cavalo: nasce nos 9 locais do mod, monta/desmonta, anda, corre, galopa, pula, sons de casco (implementado; falta testar no jogo; sem garupa nem cavalo domável)
 - [ ] Paridade: interação, domesticar, radar, caçador, locais por dia, clima
 - [ ] Medição de desempenho contra o mod original

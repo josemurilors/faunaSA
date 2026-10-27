@@ -27,6 +27,8 @@ struct AiBrain {
     unsigned stateUntil = 0;    // fim da pausa / do wander / da fuga
     unsigned nextAttack = 0;
     unsigned hurtUntil = 0;
+    unsigned dodgeFrom = 0, dodgeUntil = 0; // sai da frente de um carro (depois da buzina): corre para dodgeHeading
+    float dodgeHeading = 0;
 };
 
 struct AiWorld {
@@ -59,6 +61,16 @@ inline unsigned attackInterval(int attackRate) { // attack rate 0..100: mais alt
 inline AiOut aiStep(AiBrain& b, const AiCfg& c, const AiWorld& w) {
     AiOut o;
     if (w.hurt) b.hurtUntil = w.now + kHurtMs;
+
+    // 0. Carro vindo na direcao do animal (buzinou): corre para o lado, antes de qualquer outra coisa.
+    if (w.now >= b.dodgeFrom && w.now < b.dodgeUntil) {
+        b.state = AiState::Flee;
+        b.stateUntil = b.dodgeUntil;
+        o.heading = b.dodgeHeading;
+        o.hasHeading = true;
+        o.move = Move::Sprint;
+        return o;
+    }
 
     // 1. Atacante com alvo ao alcance: persegue e morde.
     if (c.attacksPeds && w.hasTarget && w.targetDist <= c.detectRange) {

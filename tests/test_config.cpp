@@ -101,5 +101,19 @@ int main(int argc, char** argv) {
         assert(mm::aimExcess(3.0f, 0.0f) == 0.0f); // limite 0 = desligado
     }
     for (auto& l : c.locations) assert(!(l.x == 0 && l.y == 0 && l.z == 0));
+    {   // zonas: Grove Street (LS), Downtown SF e o Strip (LV) sao cidade; Blueberry, Dillimore e Angel Pine, campo
+        assert(mm::isUrban(2495.0f, -1670.0f) && mm::isUrban(-1750.0f, 900.0f) && mm::isUrban(2030.0f, 1300.0f));
+        assert(!mm::isUrban(0.0f, 0.0f) && !mm::isUrban(700.0f, -540.0f) && !mm::isUrban(-2100.0f, -2300.0f));
+        assert(mm::scaledQuantity(4, true, 0.3f, 1.5f) == 1 && mm::scaledQuantity(1, true, 0.3f, 1.5f) == 0 && mm::scaledQuantity(4, false, 0.3f, 1.5f) == 6);
+        assert(mm::scaledQuantity(3, true, 0.0f, 1.0f) == 0 && mm::scaledQuantity(3, false, 0.0f, 1.0f) == 3);
+    }
+    {   // desvio de carro: espera o tempo de reacao, foge ate dodgeUntil na direcao pedida e depois volta ao normal
+        mm::AiBrain b; mm::AiCfg cfg; mm::AiWorld w;
+        b.dodgeFrom = 1350; b.dodgeUntil = 3500; b.dodgeHeading = 1.25f; b.state = mm::AiState::Idle;
+        w.now = 1000; assert(mm::aiStep(b, cfg, w).move == mm::Move::Idle);
+        w.now = 1400; mm::AiOut o = mm::aiStep(b, cfg, w);
+        assert(o.move == mm::Move::Sprint && o.hasHeading && o.heading == 1.25f);
+        w.now = 3600; assert(mm::aiStep(b, cfg, w).move != mm::Move::Sprint);
+    }
     std::printf("ok: %zu locais\n", c.locations.size());
 }

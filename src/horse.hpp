@@ -24,7 +24,7 @@ struct Horse {
     float x = 0, y = 0, z = 0, heading = 0, speed = 0, vz = 0, groundZ = 0, boneRest = 0;
     bool boneRestSet = false;
     bool jumping = false, stepSounded = false;
-    unsigned t0 = 0, jumpT0 = 0, idleT0 = 0, nextKick = 0, kickUntil = 0, deadSince = 0, farSince = 0;
+    unsigned t0 = 0, jumpT0 = 0, idleT0 = 0, nextKick = 0, kickUntil = 0, deadSince = 0, farSince = 0, exitT0 = 0;
 };
 
 std::array<Horse, kHorseN> gHorses;
@@ -110,7 +110,12 @@ void HorseSound(const char* file, const CVector& pos) {
 }
 
 // O controle do jogador fica LIGADO enquanto monta (camera livre, mira e tiro nativos); so a posicao e a sela sao nossas.
+bool IsRiderHier(const CAnimBlendHierarchy* h);
+
 void SetRiderFree(CPed* player) {
+    if (player->m_pRwClump)
+        for (CAnimBlendAssociation* a = RpAnimBlendClumpGetFirstAssociation(player->m_pRwClump); a; a = RpAnimBlendGetNextAssociation(a))
+            if (IsRiderHier(a->m_pHierarchy)) { a->m_nFlags &= ~ANIMATION_LOOPED; a->m_fBlendDelta = -8.0f; }
     player->bUsesCollision = true;
     player->bApplyGravity = true;
     player->bDontApplySpeed = false;
@@ -392,7 +397,13 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
         Play(ped, HA("horse_idle"));
         ped->SetPosition(h.x, h.y, h.z);
         PlaceRider(player, h, 1.0f);
-        PlayRider(player, HA("exit_right"), 8.0f);
+        // a saida toca uma vez e fica no ultimo quadro: tocar de novo a cada frame reiniciava a animacao quando ela acabava antes do tempo (CJ em loop)
+        CAnimBlendHierarchy* ex = HA("exit_right");
+        CAnimBlendAssociation* as = nullptr;
+        for (CAnimBlendAssociation* a = RpAnimBlendClumpGetFirstAssociation(player->m_pRwClump); a; a = RpAnimBlendGetNextAssociation(a))
+            if (ex && a->m_pHierarchy == ex) as = a;
+        if (!as && ex && h.exitT0 != h.t0) { as = CAnimManager::BlendAnimation(player->m_pRwClump, ex, ANIMATION_FREEZE_LAST_FRAME, 30.0f); h.exitT0 = h.t0; }
+        KeepOnly(player, as);
         if (now - h.t0 >= kDismountMs) {
             bool found = false;
             float gz = CWorld::FindGroundZFor3DCoord(player->GetPosition().x, player->GetPosition().y, player->GetPosition().z + 1.0f, &found, nullptr);
@@ -514,9 +525,34 @@ void UpdateAimZoom(float dt, CPed* player) {
 }
 
 // Um passo por frame: nasce/some os cavalos dos locais, atualiza cada um. useHit/jumpHit: tecla pressionada neste frame.
+// Diagnostico dos tiros (ate 150 linhas, a cada 250 ms atirando): onde esta a boca da arma em relacao ao eixo da camera. O jogo atira ao
+// longo do eixo da camera (Find3rdPersonCamTargetVector), entao o deslocamento da boca para esse eixo e o deslocamento das balas.
+// Compare as linhas "a pe" com as "cavalo": a diferenca em dz e quanto as balas saem mais baixas montado.
+void ShotDiag(CPed* player, unsigned now) {
+    static unsigned last = 0;
+    static int lines = 0;
+    if (lines >= 150 || !player->bFiringWeapon || now - last < 250) return;
+    int type = (int)player->GetWeapon()->m_eWeaponType;
+    CWeaponInfo* wi = type ? CWeaponInfo::GetWeaponInfo(player->GetWeapon()->m_eWeaponType, 0) : nullptr;
+    if (!wi) return;
+    last = now; ++lines;
+    RwV3d m{ wi->m_vecFireOffset.x, wi->m_vecFireOffset.y, wi->m_vecFireOffset.z };
+    player->GetTransformedBonePosition(m, 24, false);
+    CVector src, tgt;
+    TheCamera.Find3rdPersonCamTargetVector(wi->m_fWeaponRange, CVector(m.x, m.y, m.z), &src, &tgt);
+    CVector pp = player->GetPosition();
+    bool found = false;
+    float gz = CWorld::FindGroundZFor3DCoord(pp.x, pp.y, pp.z + 1.0f, &found, nullptr);
+    CCam& cam = TheCamera.m_aCams[TheCamera.m_nActiveCam];
+    Log("SHOTDIAG %s arma=%d cam=%d ped.z=%.2f chao=%.2f boca=(%.2f,%.2f,%.2f) eixo=(%.2f,%.2f,%.2f) boca-eixo=(%.2f,%.2f,%.2f) cam.z=%.2f frente.z=%.2f",
+        gRiding ? "cavalo" : "a pe", type, (int)cam.m_nMode, pp.z, found ? gz : -99.0f, m.x, m.y, m.z, src.x, src.y, src.z, m.x - src.x, m.y - src.y, m.z - src.z,
+        cam.m_vecSource.z, cam.m_vecFront.z);
+}
+
 void UpdateHorses(unsigned now, CPed* player) {
     if (!gHorseInit) InitHorse();
     if (!gHorseOn) return;
+    ShotDiag(player, now);
     static unsigned last = 0;
     float dt = last ? std::min(0.1f, (now - last) / 1000.0f) : 0.0f;
     last = now;

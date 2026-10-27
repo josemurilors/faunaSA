@@ -51,7 +51,7 @@ using namespace plugin;
 
 namespace {
 
-constexpr size_t kMaxLive = 24;        // teto de animais vivos ao mesmo tempo (todos os mitos)
+constexpr size_t kMaxLive = 48;        // capacidade do pool (o limite em jogo e [Population] MaxLive do FaunaSA.ini)
 constexpr unsigned kTickMs = 500;      // intervalo do tick de spawn/despawn
 constexpr unsigned kCorpseMs = 10000;  // tempo de cadaver antes de reciclar o slot
 constexpr float kDespawnFactor = 1.5f; // despawn acima de findRadius * fator
@@ -106,7 +106,17 @@ struct Slot {
     float lastHealth = 0;
     float heading = 0;
     unsigned nextRandomSound = 0, lastDamageSound = 0;
+    unsigned nextHornCheck = 0;
 };
+
+// FaunaSA.ini: [Population] UrbanScale/RuralScale/MaxLive e [Horn] Enabled/Animals (pets ou all).
+struct Settings {
+    float urbanScale = 0.3f, ruralScale = 1.5f;
+    size_t maxLive = 32;
+    bool hornEnabled = true, hornAll = false;
+} gCfg;
+
+void DodgeCars(Slot& s, const CVector& pos, CPed* player, unsigned now); // definida depois de gMyths
 
 std::vector<Myth> gMyths;
 std::deque<ModelRef> gModels; // um por modelo distinto (conteudo dos arquivos); enderecos estaveis
@@ -264,6 +274,16 @@ void ApplyAnimMap(Myth& m) {
     if (g.empty() || mm::lowerStr(g) == "none") return;
     m.cfg.customAnimGroup = g;
     Log("%s: sem .ifp proprio, usando o grupo de animacao '%s'", m.name.c_str(), g.c_str());
+}
+
+void LoadSettings() {
+    mm::Ini ini;
+    if (!ini.load("FaunaSA.ini")) return;
+    gCfg.urbanScale = std::max(0.0f, ini.real("Population", "UrbanScale", gCfg.urbanScale));
+    gCfg.ruralScale = std::max(0.0f, ini.real("Population", "RuralScale", gCfg.ruralScale));
+    gCfg.maxLive = (size_t)std::clamp(ini.num("Population", "MaxLive", (int)gCfg.maxLive), 1, (int)kMaxLive);
+    gCfg.hornEnabled = ini.num("Horn", "Enabled", 1) != 0;
+    gCfg.hornAll = mm::lowerStr(ini.str("Horn", "Animals", "pets")) == "all";
 }
 
 void LoadDir(const char* sub, char prefix) {
@@ -559,6 +579,7 @@ void UpdateAnimals(unsigned now) {
             target = FindTarget(s, pos, ac.detectRange, c.attacksAnimals, &td);
             if (target) { CVector tp = target->GetPosition(); w.hasTarget = true; w.targetX = tp.x; w.targetY = tp.y; w.targetDist = td; }
         }
+        DodgeCars(s, pos, player, now);
         mm::AiOut out = mm::aiStep(s.brain, ac, w);
 
         // Gira em direcao ao heading desejado (4 rad/s) e anda na velocidade da animacao atual.
@@ -637,6 +658,44 @@ void ReleaseUnusedModels() {
     }
 }
 
+// Cachorros e gatos (os do pacote original e os importados Anim94-96).
+bool IsPet(const Myth& m) {
+    std::string g = mm::lowerStr(m.cfg.customAnimGroup);
+    return g == "dog" || g == "cat" || m.name == "Anim94" || m.name == "Anim95" || m.name == "Anim96";
+}
+
+// Carro com motorista NPC vindo na direcao do animal: o motorista buzina (no maximo a cada 3 s por carro) e o animal sai pela lateral.
+void DodgeCars(Slot& s, const CVector& pos, CPed* player, unsigned now) {
+    static std::array<std::pair<CVehicle*, unsigned>, 16> honked{};
+    static size_t honkNext = 0;
+    if (!gCfg.hornEnabled || now < s.nextHornCheck) return;
+    s.nextHornCheck = now + 200;
+    if (now < s.brain.dodgeUntil || (!gCfg.hornAll && !IsPet(gMyths[s.myth]))) return;
+    auto* pool = CPools::ms_pVehiclePool;
+    for (int i = 0; i < pool->m_nSize; ++i) {
+        CVehicle* v = pool->GetAt(i);
+        if (!v || !v->m_pDriver || v->m_pDriver == player) continue;
+        float vx = v->m_vecMoveSpeed.x * 50.0f, vy = v->m_vecMoveSpeed.y * 50.0f; // por frame -> m/s
+        float sp = std::sqrt(vx * vx + vy * vy);
+        if (sp < 2.0f) continue;
+        CVector vp = v->GetPosition();
+        float ux = vx / sp, uy = vy / sp, dx = pos.x - vp.x, dy = pos.y - vp.y;
+        float ahead = dx * ux + dy * uy, side = ux * dy - uy * dx; // side > 0: animal na esquerda do carro
+        if (ahead < 2.0f || ahead > 8.0f + sp * 1.2f || std::fabs(side) > 2.5f) continue;
+        bool recent = false;
+        for (auto& h : honked) recent = recent || (h.first == v && now < h.second);
+        if (!recent) {
+            v->PlayCarHorn();
+            honked[honkNext++ % honked.size()] = { v, now + 3000 };
+        }
+        float sgn = side >= 0 ? 1.0f : -1.0f;
+        s.brain.dodgeHeading = mm::headingTo(-uy * sgn, ux * sgn);
+        s.brain.dodgeFrom = now + 350; // tempo de reacao
+        s.brain.dodgeUntil = now + 2500;
+        return;
+    }
+}
+
 int LiveOf(int myth) {
     int n = 0;
     for (size_t i = 0; i < kMaxLive; ++i) if (gPool.used((int)i) && gSlots[i].myth == myth) ++n;
@@ -698,9 +757,11 @@ void TrySpawn(int mi, const CVector& pl, unsigned now) {
     Myth& m = gMyths[mi];
     const mm::MythConfig& c = m.cfg;
     if (!mm::hourInWindow(CClock::ms_nGameClockHours, c.startHour, c.endHour)) return;
-    if (LiveOf(mi) >= c.quantity) return;
+    if (gPool.count() >= gCfg.maxLive) return;
     int loc = mm::findLocation(c, pl.x, pl.y, pl.z);
     if (loc < 0) return;
+    const mm::Location& zone = c.locations[loc];
+    if (LiveOf(mi) >= mm::scaledQuantity(c.quantity, mm::isUrban(zone.x, zone.y), gCfg.urbanScale, gCfg.ruralScale)) return;
     ModelRef& model = *m.models[rand() % m.models.size()];
     if (!EnsureLoaded(model, now)) return; // pede e volta no proximo tick: nao trava o frame
     // Como o original: cada animal nasce espalhado em volta do local, na altura real do chao. Se a colisao do
@@ -855,6 +916,9 @@ void OnProcess() {
     gStage = "idle";
     if (!gLoaded) { // modelos so existem depois do jogo carregar; resolve uma vez
         gLoaded = true;
+        LoadSettings();
+        Log("populacao: cidade x%.2f, campo x%.2f, max %zu animais; buzina %s (%s)", gCfg.urbanScale, gCfg.ruralScale, gCfg.maxLive,
+            gCfg.hornEnabled ? "ligada" : "desligada", gCfg.hornAll ? "todos" : "caes e gatos");
         LoadDir("Animals", 'A');
         LoadDir("Myths", 'M');
         Log("mitos com modelos: %zu", gMyths.size());
