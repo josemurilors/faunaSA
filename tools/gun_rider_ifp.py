@@ -85,6 +85,7 @@ def main():
     sit = next(s for n, s, _ in orig if n.lower() == 'sit')
     sa = X.SARig(dff, sit)
     gun = X.GunRig(pak, 'gun')
+    ref = mean_pose(gun, gun.anim('gun_h_walk.ska', 'h_walk'))
     odict = {n.lower(): s for n, s, _ in orig}
     result = []; lower = []
     for name, seqs, raw in cur:
@@ -92,8 +93,7 @@ def main():
         if key.startswith('sitl'): continue                      # refeitas abaixo
         if key in CLIPS:
             grupo, gname, target = CLIPS[key]
-            ref_clip = mean_pose(gun, gun.anim(gname, grupo))
-            s = build(gun, sa, odict[key], ref_clip, name, grupo, gname, target)
+            s = build(gun, sa, odict[key], ref, name, grupo, gname, target)
             result.append((name, X.anim_bytes_c(name, s))); lower.append(legs(name, s))
             print('%-14s <- %-26s %.2f s' % (name, gname, gun.anim(gname, grupo)['duracao']))
         elif key.startswith(('sit', 'jump_on', 'exit_')):
