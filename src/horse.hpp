@@ -490,7 +490,13 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     // O jogo faz "coronhada" (GUN_BUTT) se ha um ped vivo a menos de 1 m na frente do CJ: o cavalo, colado nele. Com a origem do CJ exatamente
     // na do cavalo o vetor CJ->cavalo e nulo e a checagem (produto escalar > 0) falha; por isso, mirando, sem deslocamento lateral nem para tras.
     // Com as pernas sentadas (sitl_*) a raiz da animacao ja poe o CJ na sela: so sem elas a pose em pe precisa subir.
-    PlaceRider(player, h, aiming ? 0.0f : -0.05f, lift + (aiming && !HA("sitl") ? 0.5f : 0.0f), 0.0f);
+    float rback = 0.0f;
+    if (!aiming && now >= h.kickUntil && !h.jumping) {
+        int g2 = mm::gait(h.speed);
+        if (g2 == 2) rback = -0.08f; // sit_run: inclina um pouco pra frente
+        else if (g2 == 3) rback = -0.14f; // sit_galop: inclina mais pra frente igual ao Gun
+    }
+    PlaceRider(player, h, aiming ? 0.0f : -0.05f, lift + (aiming && !HA("sitl") ? 0.5f : 0.0f), rback);
     player->bIsStanding = true; player->bWasStanding = true; player->bIsInTheAir = false; player->bIsLanding = false; // colisao desligada: sem isso o jogo acha que ele esta no ar
     AlignGun(player, aiming);
     ClampAim(player, h.heading, now, aiming);
