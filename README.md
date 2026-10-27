@@ -16,7 +16,7 @@
 
 | | |
 | --- | --- |
-| **Versão** | 1.0.0 |
+| **Versão** | 1.0.1 |
 | **Estado** | Estável (1.0): spawn, animação, IA básica, população por zona, buzina, cavalo e os animais extras funcionam na instalação do autor; falta a paridade com o mod original e há problemas conhecidos (seção 7) |
 | **Contexto** | Projeto pessoal de modding, feito a partir da engenharia reversa do Myths Maker 2.7 |
 | **Alvo** | `gta_sa.exe` 1.0 US, com ASI Loader, Modloader e Open Limit Adjuster |
@@ -38,7 +38,7 @@
 
 ## Início rápido
 
-**Pacote pronto:** baixe `FaunaSA-v1.0.0.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`, onde já ficam `modloader` e `cleo`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader (`modloader\Myths Maker`). Não há mais nada para instalar. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
+**Pacote pronto:** baixe `FaunaSA-v1.0.1.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`, onde já ficam `modloader` e `cleo`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader (`modloader\Myths Maker`). Não há mais nada para instalar. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
 
 **A partir do código** (para quem já tem o mod original):
 

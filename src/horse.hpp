@@ -116,6 +116,8 @@ void SetRiderFree(CPed* player) {
     if (player->m_pRwClump)
         for (CAnimBlendAssociation* a = RpAnimBlendClumpGetFirstAssociation(player->m_pRwClump); a; a = RpAnimBlendGetNextAssociation(a))
             if (IsRiderHier(a->m_pHierarchy)) { a->m_nFlags &= ~ANIMATION_LOOPED; a->m_fBlendDelta = -8.0f; }
+    // KeepOnly zerou as animacoes do proprio CJ: sem uma base entrando, o peso total cai abaixo de 1 e o corpo desaba ("deita") ao sair da sela
+    if (player->m_pRwClump && player->m_fHealth > 0.0f) CAnimManager::BlendAnimation(player->m_pRwClump, player->m_nAnimGroup, PED_ANIM_IDLE_STANCE, 8.0f);
     player->bUsesCollision = true;
     player->bApplyGravity = true;
     player->bDontApplySpeed = false;
