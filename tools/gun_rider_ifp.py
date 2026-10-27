@@ -94,6 +94,10 @@ def main():
         if key in CLIPS:
             grupo, gname, target = CLIPS[key]
             s = build(gun, sa, odict[key], ref, name, grupo, gname, target)
+            if key == 'sit_run':
+                s = [(bid, typ, [(q, t, (p[0], p[1] + 0.02, p[2] - 0.01) if p is not None else None) for t,q,p in keys]) for bid,typ,keys in s]
+            if key == 'sit_galop':
+                s = [(bid, typ, [(q, t, (p[0], p[1] + 0.05, p[2] - 0.02) if p is not None else None) for t,q,p in keys]) for bid,typ,keys in s]
             result.append((name, X.anim_bytes_c(name, s))); lower.append(legs(name, s))
             print('%-14s <- %-26s %.2f s' % (name, gname, gun.anim(gname, grupo)['duracao']))
         elif key.startswith(('sit', 'jump_on', 'exit_')):
