@@ -491,7 +491,7 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     // na do cavalo o vetor CJ->cavalo e nulo e a checagem (produto escalar > 0) falha; por isso, mirando, sem deslocamento lateral nem para tras.
     // Com as pernas sentadas (sitl_*) a raiz da animacao ja poe o CJ na sela: so sem elas a pose em pe precisa subir.
     float rback = 0.0f;
-    if (!aiming && now >= h.kickUntil && !h.jumping) {
+    if (gRiding && !aiming && now >= h.kickUntil && !h.jumping) {
         int g2 = mm::gait(h.speed);
         if (g2 == 2) rback = 0.12f; // sit_run
         else if (g2 == 3) rback = 0.22f; // sit_galop: CJ mais pra tras na sela
