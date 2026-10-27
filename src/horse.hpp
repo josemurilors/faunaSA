@@ -493,8 +493,8 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     float rback = 0.0f;
     if (!aiming && now >= h.kickUntil && !h.jumping) {
         int g2 = mm::gait(h.speed);
-        if (g2 == 2) rback = -0.08f; // sit_run: inclina um pouco pra frente
-        else if (g2 == 3) rback = -0.14f; // sit_galop: inclina mais pra frente igual ao Gun
+        if (g2 == 2) rback = 0.12f; // sit_run
+        else if (g2 == 3) rback = 0.22f; // sit_galop: CJ mais pra tras na sela
     }
     PlaceRider(player, h, aiming ? 0.0f : -0.05f, lift + (aiming && !HA("sitl") ? 0.5f : 0.0f), rback);
     player->bIsStanding = true; player->bWasStanding = true; player->bIsInTheAir = false; player->bIsLanding = false; // colisao desligada: sem isso o jogo acha que ele esta no ar
