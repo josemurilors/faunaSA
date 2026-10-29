@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
         assert(std::fabs(mm::wrapAngle(7.0f) - (7.0f - 6.2831853f)) < 1e-4f && std::fabs(mm::wrapAngle(-7.0f) - (-7.0f + 6.2831853f)) < 1e-4f);
         assert(std::fabs(mm::approach(0.0f, 4.7f, 3.0f, 0.1f) - 0.3f) < 1e-5f);
         assert(mm::approach(4.6f, 4.7f, 3.0f, 0.1f) == 4.7f && mm::approach(0.1f, 0.0f, 8.0f, 0.1f) == 0.0f && mm::approach(5.0f, 5.0f, 3.0f, 0.1f) == 5.0f);
-        assert(mm::gait(0.0f) == 0 && mm::gait(1.0f) == 1 && mm::gait(2.79f) == 1 && mm::gait(2.8f) == 2 && mm::gait(6.19f) == 2 && mm::gait(6.2f) == 3);
+        assert(mm::gait(0.0f) == 0 && mm::gait(1.0f) == 1 && mm::gait(1.49f) == 1 && mm::gait(1.5f) == 2 && mm::gait(6.39f) == 2 && mm::gait(6.4f) == 3);
         const float lim = 75.0f * 3.14159265f / 180.0f;
         assert(mm::aimExcess(0.5f, lim) == 0.0f && mm::aimExcess(-lim, lim) == 0.0f);
         assert(std::fabs(mm::aimExcess(1.5f, lim) - (1.5f - lim)) < 1e-5f && std::fabs(mm::aimExcess(-1.5f, lim) + (1.5f - lim)) < 1e-5f);

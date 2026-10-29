@@ -14,6 +14,8 @@ constexpr float kHorseSpawnDist = 100.0f, kHorseDespawnDist = 140.0f, kHorseMoun
 constexpr float kHorseCenter = 0.95f; // centro do ped acima do chao (os cascos ficam em -0,93 na pose parada)
 constexpr unsigned kHorseFarMs = 60000, kMountMs = 1070, kDismountMs = 1170;
 constexpr float kHorseWalk = 0.93f, kHorseRun = 4.0f, kHorseSprint = 7.23f; // m/s, velocidade do solo das animacoes do Gun (tools/gun_to_ifp.py --native)
+// Velocidade real do cavalo: mais rapida que a do ciclo; a animacao toca acelerada (ate 1,6x) e o pe escorrega um pouco, melhor que um cavalo lento
+constexpr float kHorseRunSpeed = 5.5f, kHorseSprintSpeed = 11.0f;
 const char* const kHorseDir = "FaunaSA\\horse\\";
 
 enum class HState { Idle, Mounting, Riding, Dismounting };
@@ -31,6 +33,7 @@ std::array<Horse, kHorseN> gHorses;
 ModelRef gHorseModel{ "cavalo" };
 std::map<std::string, CAnimBlendHierarchy*> gHorseAnim; // nome do bloco em minusculas
 bool gHorseOn = true, gHorseInit = false, gRiding = false, gAiming = false;
+float gRideSpeed = 0.0f; // m/s do cavalo montado (0 sem cavaleiro): o FOV abre com a velocidade
 bool gAlignGun = true; // FaunaSA.ini [Horse] AlignGun=0 desliga a correcao do cano (veja AlignGun)
 float gGunOff = 0.0f;
 float gAimLimit = 0.0f; // rad para cada lado do cavalo; FaunaSA.ini [Horse] AimLimit = graus no total (150). 0 (padrao) = nao mexe na camera
@@ -445,12 +448,13 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     if (useHit) { h.st = HState::Dismounting; h.t0 = now; h.speed = 0.0f; return; }
     float sx = pad->NewState.LeftStickX, sy = pad->NewState.LeftStickY;
     bool forward = sy < -10.0f, back = sy > 10.0f, sprint = pad->NewState.ButtonCross > 0;
-    float turn = (h.speed > 6.0f ? 0.9f : h.speed > 2.8f ? 1.2f : 1.6f);
+    float turn = (h.speed > 7.0f ? 0.8f : h.speed > 3.5f ? 1.2f : 1.6f);
     if (std::fabs(sx) > 10.0f && !h.jumping) h.heading = WrapAngle(h.heading - (sx / 128.0f) * turn * dt);
-    float target = forward ? (sprint ? kHorseSprint : kHorseRun) : 0.0f;
-    float accel = target > h.speed ? (sprint ? 5.0f : 3.0f) : (back ? 14.0f : 8.0f);
+    float target = forward ? (sprint ? kHorseSprintSpeed : kHorseRunSpeed) : 0.0f;
+    float accel = target > h.speed ? (sprint ? 6.0f : 4.0f) : (back ? 14.0f : 8.0f);
     if (h.jumping) { target = h.speed; accel = 0; }
     h.speed = mm::approach(h.speed, target, accel, dt);
+    gRideSpeed = h.speed;
 
     float nx = h.x, ny = h.y;
     if (h.speed > 0.05f) {
@@ -489,8 +493,8 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     // Mirando, o CJ fica na pose em pe do jogo (sem a raiz que o "senta" na sela): sobe 0,45 m e recua 0,3 m, senao o tronco afunda no cavalo
     // O jogo faz "coronhada" (GUN_BUTT) se ha um ped vivo a menos de 1 m na frente do CJ: o cavalo, colado nele. Com a origem do CJ exatamente
     // na do cavalo o vetor CJ->cavalo e nulo e a checagem (produto escalar > 0) falha; por isso, mirando, sem deslocamento lateral nem para tras.
-    // Com as pernas sentadas (sitl_*) a raiz da animacao ja poe o CJ na sela: so sem elas a pose em pe precisa subir.
-    PlaceRider(player, h, aiming ? 0.0f : -0.05f, lift + (aiming && !HA("sitl") ? 0.5f : 0.0f));
+    // Mirando a raiz e a pelve sao as da base de mira (em pe); sobe 0,61 m (quadril a altura da sela do Gun) e as pernas sentadas vem de sitl_*.
+    PlaceRider(player, h, aiming ? 0.0f : -0.05f, lift + (aiming ? 0.61f : 0.0f));
     player->bIsStanding = true; player->bWasStanding = true; player->bIsInTheAir = false; player->bIsLanding = false; // colisao desligada: sem isso o jogo acha que ele esta no ar
     AlignGun(player, aiming);
     ClampAim(player, h.heading, now, aiming);
@@ -507,7 +511,7 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     else if (g == 2) { horse = HA("horse_run"); rn = "sit_run"; native = kHorseRun; }
     else { horse = HA("horse_sprint"); rn = "sit_galop"; native = kHorseSprint; }
     rider = HA(rn);
-    float rate = native > 0.0f ? std::clamp(h.speed / native, 0.6f, 1.3f) : 1.0f;
+    float rate = native > 0.0f ? std::clamp(h.speed / native, 0.6f, 1.6f) : 1.0f;
     CAnimBlendAssociation* ah = PlayHorse(ped, horse);
     // Mirando, a pose de sela vira pose em pe com a mira do jogo (misturar as duas deitava o CJ); so se zeram os passos
     CAnimBlendAssociation* ar = nullptr;
@@ -532,6 +536,8 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     }
     if (ah) ah->m_fSpeed = rate;
     if (ar) ar->m_fSpeed = rate;
+    // cavalo e cavaleiro tem ciclos de mesma duracao (Gun): mantem a mesma fase, senao o CJ balanca fora do passo do cavalo
+    if (ah && ar && native > 0.0f && !h.jumping && now >= h.kickUntil) ar->m_fCurrentTime = ah->m_fCurrentTime;
     LogRiderDiag(now, player, h, aiming);
     if (ah && !h.jumping && h.speed >= 2.8f) { // casco no inicio de cada ciclo; asfalto e concreto soam diferente da terra
         float t = ah->m_fCurrentTime;
@@ -550,13 +556,16 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
 // Zoom ao mirar do cavalo (como no Red Dead): o campo de visao fecha 40% em 0,25 s e volta ao soltar a mira. O jogo reescreve o FOV a
 // cada frame, entao a conta parte do valor que ele pos neste frame (e nao do que escrevemos no anterior).
 void UpdateAimZoom(float dt, CPed* player) {
-    static float zoom = 0.0f, lastWritten = 0.0f, lastBase = 0.0f;
+    static float zoom = 0.0f, speed = 0.0f, lastWritten = 0.0f, lastBase = 0.0f;
     bool aim = gRiding && gAiming;
     zoom = std::clamp(zoom + (aim ? 1.0f : -1.0f) * dt / 0.25f, 0.0f, 1.0f);
+    // sensacao de velocidade: o campo de visao abre ate 18% no galope (so sem mirar, a mira fecha)
+    speed += (gRiding ? std::min(1.0f, gRideSpeed / kHorseSprintSpeed) - speed : -speed) * std::min(1.0f, 3.0f * dt);
+    float k = (1.0f - 0.4f * zoom) * (1.0f + 0.18f * speed * (1.0f - zoom));
     float cur = CDraw::ms_fFOV;
     float base = (lastWritten != 0.0f && cur == lastWritten) ? lastBase : cur;
-    if (zoom > 0.001f) {
-        CDraw::ms_fFOV = base * (1.0f - 0.4f * zoom);
+    if (std::fabs(k - 1.0f) > 0.001f) {
+        CDraw::ms_fFOV = base * k;
         lastWritten = CDraw::ms_fFOV; lastBase = base;
     } else {
         lastWritten = 0.0f;

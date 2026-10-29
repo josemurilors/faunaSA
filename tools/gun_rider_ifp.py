@@ -26,6 +26,8 @@ CLIPS = {'sit': ('h_idles', 'gun_h_standidle.ska'), 'sit_walk': ('h_walk', 'gun_
 PLACE_DX, PLACE_DZ = 0.05, 0.05      # horse.hpp: PlaceRider(dx=-0.05) e +0.05 em z; a raiz da animacao compensa
 SEAT_DY = 0.326      # `sit` original leva a raiz 0,326 m para tras; montar/sair originais sobem isso para a sela nova (na origem)
 LOWER = {0, 1, 41, 42, 43, 44, 51, 52, 53, 54}
+THIGHS = {41, 51}     # filhos da pelve: os unicos que dependem da orientacao dela
+PED_IFP = r'D:/Games/GTA San Andreas/anim/ped.ifp'
 MIN_SEG = 0.03       # segmentos mais curtos que isso (m) nao dao direcao confiavel
 
 def mv(m, v): return [sum(m[i][k] * v[k] for k in range(3)) for i in range(3)]
@@ -109,9 +111,23 @@ def shifted(seqs):
     """animacao original com a raiz levada SEAT_DY para frente (a sela nova fica na origem do cavalo)"""
     return [(bid, typ, [(q, t, p and (p[0], p[1] + SEAT_DY, p[2])) for t, q, p in keys]) for bid, typ, keys in seqs]
 
-def legs(name, seqs):
-    """so raiz, pelve e pernas: tocado como parcial por cima da base de mira, o tronco fica livre para mirar como no Gun"""
-    return X.anim_bytes_c('sitl' + name[3:], [s for s in seqs if s[0] in LOWER])
+def legs(name, seqs, base):
+    """So as coxas e abaixo, para tocar como PARCIAL por cima da base de mira do jogo (gun_stand): o tronco fica livre para mirar como no Gun e
+    raiz/pelve ficam os da base (se a parcial trouxesse os da sentada, o corpo girava ~50 graus e o cano da arma apontava para tras).
+    As coxas sao refeitas para manter a orientacao de sentada no mundo sob a raiz e a pelve da base."""
+    q = {bid: keys for bid, _, keys in seqs}
+    Wb = X.mm(base[0], base[1])                                       # raiz x pelve da base
+    out = []
+    for bid, typ, keys in seqs:
+        if bid not in THIGHS: continue
+        nk = []
+        for k, (qq, t, p) in enumerate(keys):
+            Ws = X.mm(X.row2col(G.q2m(q[0][k][0])), X.row2col(G.q2m(q[1][k][0])))       # raiz x pelve da sentada
+            W = X.mm(Ws, X.row2col(G.q2m(qq)))                                           # coxa no mundo
+            nk.append((G.m2q(X.tp(X.mm(X.tp(Wb), W))), t, p))
+        out.append((bid, typ, nk))
+    out += [s for s in seqs if s[0] in LOWER and s[0] not in THIGHS and s[0] > 1]
+    return X.anim_bytes_c('sitl' + name[3:], out)
 
 def main():
     pak, orig_ifp, work = sys.argv[1:4]
@@ -119,6 +135,8 @@ def main():
     sit = next(s for n, s, _ in orig if n.lower() == 'sit')
     odict = {n.lower(): s for n, s, _ in orig}
     rider = Rider(pak, sit)
+    gs = {b: k[0][1] for b, _, k in next(x for n, x, _ in X.read_ifp(sys.argv[4] if len(sys.argv) > 4 else PED_IFP)[1] if n.lower() == 'gun_stand')}
+    base = (X.row2col(G.q2m(gs[0])), X.row2col(G.q2m(gs[1])))     # raiz e pelve da base de mira
     _, cur = X.read_ifp(work)
     result = []; lower = []
     for name, seqs, raw in cur:
@@ -127,7 +145,7 @@ def main():
         if key in CLIPS:
             grupo, gname = CLIPS[key]
             s = rider.build(odict[key], gname, grupo)
-            result.append((name, X.anim_bytes_c(name, s))); lower.append(legs(name, s))
+            result.append((name, X.anim_bytes_c(name, s))); lower.append(legs(name, s, base))
             print('%-10s <- %-20s %.2f s  raiz %s' % (name, gname, rider.gun.anim(gname, grupo)['duracao'], [round(c, 3) for c in s[0][2][0][2]]))
         elif key.startswith(('jump_on', 'exit_')):
             result.append((name, X.anim_bytes_c(name, shifted(odict[key]))))
