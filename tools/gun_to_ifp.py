@@ -208,7 +208,7 @@ MAP = {1: 22, 2: 1, 3: 5, 4: 7, 5: 8,
 # ciclo e seria rapido demais. kick_forward e usado como coice parado e no pulo (1.03 s): o Gun nao tem coice de trás, so empinar com as patas da
 # frente (trample_fwd), que tambem serve de pulo (patas da frente erguidas); troque aqui por horse_jump.ska se preferir um salto de verdade.
 CLIPS = {'horse_idle': ('horse_standidle.ska', None), 'horse_idle_1': ('horse_friskyidle.ska', None), 'horse_walk': ('horse_walk.ska', None),
-         'horse_run': ('horse_trot.ska', None), 'horse_sprint': ('horse_canter.ska', None), 'horse_kick_forward': ('horse_trample_fwd.ska', None)}
+         'horse_run': ('horse_trot.ska', None), 'horse_sprint': ('horse_gallop.ska', None), 'horse_kick_forward': ('horse_trample_fwd.ska', None)}
 FADE = {'horse_kick_forward': (0.15, 0.25)}      # o empinar entra e sai da pose parada em vez de dar tranco
 # animacao nova (nao existe no IFP original). O pulo do Gun (2,2 s) decola em ~0,30 s, pousa em ~0,82 s e depois ainda estica o corpo: usa 0,30-1,10 s,
 # com o voo esticado para os ~0,7 s do arco do jogo (vz 5,6 e g 16) e a recuperacao em 0,35 s

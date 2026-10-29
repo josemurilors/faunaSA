@@ -13,7 +13,7 @@ constexpr int kHorseSpotN = 9, kHorseManual = 9, kHorseN = 10;
 constexpr float kHorseSpawnDist = 100.0f, kHorseDespawnDist = 140.0f, kHorseMountDist = 3.0f;
 constexpr float kHorseCenter = 0.95f; // centro do ped acima do chao (os cascos ficam em -0,93 na pose parada)
 constexpr unsigned kHorseFarMs = 60000, kMountMs = 1070, kDismountMs = 1170;
-constexpr float kHorseWalk = 0.93f, kHorseRun = 4.0f, kHorseSprint = 7.14f; // m/s, velocidade do solo das animacoes do Gun (tools/gun_to_ifp.py --native)
+constexpr float kHorseWalk = 0.93f, kHorseRun = 4.0f, kHorseSprint = 7.23f; // m/s, velocidade do solo das animacoes do Gun (tools/gun_to_ifp.py --native)
 const char* const kHorseDir = "FaunaSA\\horse\\";
 
 enum class HState { Idle, Mounting, Riding, Dismounting };
@@ -490,13 +490,7 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     // O jogo faz "coronhada" (GUN_BUTT) se ha um ped vivo a menos de 1 m na frente do CJ: o cavalo, colado nele. Com a origem do CJ exatamente
     // na do cavalo o vetor CJ->cavalo e nulo e a checagem (produto escalar > 0) falha; por isso, mirando, sem deslocamento lateral nem para tras.
     // Com as pernas sentadas (sitl_*) a raiz da animacao ja poe o CJ na sela: so sem elas a pose em pe precisa subir.
-    float rback = 0.0f;
-    if (gRiding && !aiming && now >= h.kickUntil && !h.jumping) {
-        int g2 = mm::gait(h.speed);
-        if (g2 == 2) rback = 0.12f; // sit_run
-        else if (g2 == 3) rback = 0.22f; // sit_galop: CJ mais pra tras na sela
-    }
-    PlaceRider(player, h, aiming ? 0.0f : -0.05f, lift + (aiming && !HA("sitl") ? 0.5f : 0.0f), rback);
+    PlaceRider(player, h, aiming ? 0.0f : -0.05f, lift + (aiming && !HA("sitl") ? 0.5f : 0.0f));
     player->bIsStanding = true; player->bWasStanding = true; player->bIsInTheAir = false; player->bIsLanding = false; // colisao desligada: sem isso o jogo acha que ele esta no ar
     AlignGun(player, aiming);
     ClampAim(player, h.heading, now, aiming);
