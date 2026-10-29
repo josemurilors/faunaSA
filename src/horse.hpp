@@ -30,7 +30,12 @@ struct Horse {
 };
 
 std::array<Horse, kHorseN> gHorses;
-ModelRef gHorseModel{ "cavalo" };
+// Pelagens do Gun (mesma malha e esqueleto, outro TXD): cinza, appaloosa, baio e pinto. As 4 ultimas sao opcionais (se faltarem no img, usa a cinza).
+constexpr int kHorseCoats = 5; // a ultima (cavalo do Reverendo Reed, modelo a parte) so sai pelo F9
+const char* const kHorseCoatName[kHorseCoats] = { "cavalo", "cavalo1", "cavalo2", "cavalo3", "cavalo4" };
+const char* const kHorseCoatLabel[kHorseCoats] = { "Cinza", "Appaloosa", "Baio", "Pinto", "do Reed" };
+std::array<ModelRef, kHorseCoats> gHorseModels{ ModelRef{ "cavalo" }, ModelRef{ "cavalo1" }, ModelRef{ "cavalo2" }, ModelRef{ "cavalo3" }, ModelRef{ "cavalo4" } };
+int gManualCoat = 0;
 std::map<std::string, CAnimBlendHierarchy*> gHorseAnim; // nome do bloco em minusculas
 bool gHorseOn = true, gHorseInit = false, gRiding = false, gAiming = false;
 float gRideSpeed = 0.0f; // m/s do cavalo montado (0 sem cavaleiro): o FOV abre com a velocidade
@@ -135,9 +140,11 @@ void RemoveHorse(int i) {
     h = Horse{};
 }
 
-bool SpawnHorse(int i, float x, float y, float groundZ, float headingDeg, unsigned now) {
-    if (!EnsureLoaded(gHorseModel, now)) return false;
-    auto* ped = new CCivilianPed(PED_TYPE_MISSION1, gHorseModel.id);
+bool SpawnHorse(int i, float x, float y, float groundZ, float headingDeg, unsigned now, int coat = 0) {
+    if (coat < 0 || coat >= kHorseCoats || !CStreaming::ms_pExtraObjectsDir || !CStreaming::ms_pExtraObjectsDir->FindItem(kHorseCoatName[coat])) coat = 0;
+    ModelRef& model = gHorseModels[coat];
+    if (!EnsureLoaded(model, now)) return false;
+    auto* ped = new CCivilianPed(PED_TYPE_MISSION1, model.id);
     if (!ped) return false;
     ped->m_nCreatedBy = 2; // PED_MISSION: o gerenciador de populacao nao recicla
     ped->m_fHealth = 1500.0f;
@@ -447,6 +454,8 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     // Riding: analogico = rumo e marcha. Esticar anda e depois corre (acelera); a tecla de correr da galope.
     if (useHit) { h.st = HState::Dismounting; h.t0 = now; h.speed = 0.0f; return; }
     float sx = pad->NewState.LeftStickX, sy = pad->NewState.LeftStickY;
+    // o analogico guia so o cavalo: o jogo (que roda depois deste gancho) usava o mesmo analogico para virar o CJ por conta propria, fora do rumo do cavalo
+    pad->NewState.LeftStickX = pad->NewState.LeftStickY = 0;
     bool forward = sy < -10.0f, back = sy > 10.0f, sprint = pad->NewState.ButtonCross > 0;
     float turn = (h.speed > 7.0f ? 0.8f : h.speed > 3.5f ? 1.2f : 1.6f);
     if (std::fabs(sx) > 10.0f && !h.jumping) h.heading = WrapAngle(h.heading - (sx / 128.0f) * turn * dt);
@@ -617,7 +626,7 @@ void UpdateHorses(unsigned now, CPed* player) {
             bool found = false;
             float gz = CWorld::FindGroundZFor3DCoord(sp.x, sp.y, sp.z < -99.0f ? 100.0f : sp.z + 30.0f, &found, nullptr);
             if (!found || (sp.z > -99.0f && std::fabs(gz - sp.z) > 30.0f)) continue; // chao ainda nao carregou
-            SpawnHorse(i, sp.x, sp.y, gz, sp.heading, now);
+            SpawnHorse(i, sp.x, sp.y, gz, sp.heading, now, i % (kHorseCoats - 1));
         }
     }
     for (int i = 0; i < kHorseN; ++i) {
@@ -644,12 +653,16 @@ void SpawnHorseAhead(CPed* player, unsigned now) {
     bool found = false;
     float gz = CWorld::FindGroundZFor3DCoord(p.x, p.y, p.z + 2.0f, &found, nullptr);
     if (!found) { Toast("Sem chao carregado aqui", now); return; }
-    if (SpawnHorse(kHorseManual, p.x, p.y, gz, player->m_fHeadingCurrent * 57.29578f + 180.0f, now)) Toast("Spawnado: Cavalo", now);
+    int coat = gManualCoat % kHorseCoats;
+    if (SpawnHorse(kHorseManual, p.x, p.y, gz, player->m_fHeadingCurrent * 57.29578f + 180.0f, now, coat)) {
+        gManualCoat = (gManualCoat + 1) % kHorseCoats; // cada Enter da uma pelagem
+        Toast((std::string("Spawnado: Cavalo ") + kHorseCoatLabel[coat]).c_str(), now);
+    }
     else Toast("Carregando o modelo do cavalo... aperte Enter de novo", now);
 }
 
 void ResetHorses() { // novo jogo/load: os ponteiros antigos nao valem mais (sem chamar o jogo)
     for (auto& h : gHorses) h = Horse{};
-    gHorseModel = ModelRef{ "cavalo" };
+    for (int c = 0; c < kHorseCoats; ++c) gHorseModels[c] = ModelRef{ kHorseCoatName[c] };
     gRiding = false; gRider = -1;
 }

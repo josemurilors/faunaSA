@@ -47,10 +47,12 @@ def passo(d, p0):
     return max(range(28, 100, 4), key=lambda s: sum(d[p0 + i] == d[p0 + i + s] for i in range(3000)))
 
 def le_skin(dados, off, tam):
-    k = off
+    """Testa cada marca do bloco e fica com a malha de mais indices: nos skins de cutscene o pre-cabecalho traz marcas de tabelas pequenas
+    (64 indices) que tambem fecham a conta de vertices."""
+    k, best = off, None
     while True:                       # o bloco comeca com dados de pre-cabecalho que tambem podem conter a marca: vale a que fecha a conta
         k = dados.find(MARCA, k + 1, off + tam)
-        if k < 0: sys.exit('cabecalho de .skin nao achado')
+        if k < 0: break
         hdr = k - 24
         n = struct.unpack_from('<I', dados, hdr + 32)[0] & 0xffff
         p0, s = hdr + 44, passo(dados, hdr + 44)
@@ -59,8 +61,10 @@ def le_skin(dados, off, tam):
                 idx = struct.unpack_from('<%dH' % n, dados, p0 + V * s)
                 if n and max(idx) == V - 1: break
             else: continue
-            break
         except struct.error: continue
+        if not best or n > best[0]: best = (n, V, p0, s, idx)
+    if not best: sys.exit('cabecalho de .skin nao achado')
+    n, V, p0, s, idx = best
     vs = []
     for i in range(V):
         o = p0 + i * s

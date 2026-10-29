@@ -1,6 +1,7 @@
 r"""Gera cavalo.dff/.txd do SA a partir da malha do cavalo do Gun (corpo, sela e crina) com o esqueleto do Gun nos IDs de osso do ped do SA.
 
-Uso: python gun_horse_dff.py <global.pak.xbx do Gun> <cavalo.dff original> <saida cavalo.dff> <saida cavalo.txd>
+Uso: python gun_horse_dff.py <global.pak.xbx do Gun> <cavalo.dff original> <saida cavalo.dff> <saida cavalo.txd> [pelagem [crina]]
+pelagem = horse (cinza), horse_01 (appaloosa), horse_02 (baio), horse_03 (pinto); crina = horse_mane ou horse_mane_pinto
 
 O esqueleto do SA (frames) copia as rotacoes de repouso e as posicoes do .ske (x0,0254 m por unidade): as chaves do .ska passam a valer sem
 retarget (ver gun_to_ifp.py). O Gun tem 35 ossos e o ped do SA 32 ids: as orelhas e o topete (9, 10, 11) viram a cabeca.
@@ -51,7 +52,8 @@ def load_skin(pak, name):
     vs, idx, _ = gun_model.le_skin(dados, o, s)
     return vs, list(gun_model.tiras(idx))
 
-def build(pak, orig_dff, out_dff, out_txd):
+def build(pak, orig_dff, out_dff, out_txd, coat='horse', mane='horse_mane', reed=None):
+    """reed = pak da cutscene JS_Mid1: troca as partes pelo corpo do cavalo do Reed (horse_reed, atlas 256 unico: crina/cauda/cinto usam a textura errada)"""
     gun = X.GunRig(pak)
     order = dfs(gun.par)
     keep = [i for i in order if i in SA_ID]
@@ -86,11 +88,13 @@ def build(pak, orig_dff, out_dff, out_txd):
 
     # geometrias do Gun juntas em uma so, uma material por skin
     # (skin, bloco de textura, indice da difusa no bloco: no corpo a ordem e normal, difusa, especular)
-    parts = [('horse\\horse.skin', 'horse/horse.tex', 1, 'horse'), ('horse_saddle.skin', 'horse_saddle.tex', 0, 'horse_saddle'),
-             ('horse_mane.skin', 'horse_mane.tex', 0, 'horse_mane')]     # na crina a ordem e difusa (DXT5 com alfa), normal, especular
+    parts = [('horse\\horse.skin', coat + '.tex', 1, 'horse'), ('horse_saddle.skin', 'horse_saddle.tex', 0, 'horse_saddle'),
+             (mane + '.skin', mane + '.tex', 0, 'horse_mane')]     # na crina a ordem e difusa (DXT5 com alfa), normal, especular
+    if reed: parts = [('horse_reed.skin', 'horse_reed.tex', 2, 'horse')]
+    paks = [reed or pak] * len(parts)
     pts, uvs, wts, bidx, tris, tnames = [], [], [], [], [], []
     for mi, (skin, tex, tix, tname) in enumerate(parts):
-        vs, tr = load_skin(pak, skin)
+        vs, tr = load_skin(paks[mi], skin)
         base = len(pts)
         for p, uv, (w0, w1), bs in vs:
             b3 = [MERGE.get(x // 3, x // 3) for x in bs[:3]]
@@ -152,10 +156,13 @@ def build(pak, orig_dff, out_dff, out_txd):
     atomic = chunk(0x14, struct_(struct.pack('<IIII', 0, 0, 5, 0)) + aext)
     clump = chunk(0x10, struct_(struct.pack('<III', 1, 0, 0)) + framelist + geoms + atomic + ext())
     open(out_dff, 'wb').write(clump)
-    open(out_txd, 'wb').write(gun_tex.txd([(tn, gun_tex.le_tex(pak, tex)[tix]) for _, tex, tix, tn in parts]))
+    open(out_txd, 'wb').write(gun_tex.txd([(tn, gun_tex.le_tex(pk, tex)[tix]) for pk, (_, tex, tix, tn) in zip(paks, parts)]))
     return pts, parts, keep, tris, normals
 
 if __name__ == '__main__':
     pak, orig, out_dff, out_txd = sys.argv[1:5]
-    pts, parts, keep, _, _ = build(pak, orig, out_dff, out_txd)
+    reed = sys.argv[sys.argv.index('--reed') + 1] if '--reed' in sys.argv else None
+    rest = [a for a in sys.argv[5:] if a != '--reed' and a != reed]
+    coat, mane = (rest + ['horse_mane'])[:2] if rest else ('horse', 'horse_mane')
+    pts, parts, keep, _, _ = build(pak, orig, out_dff, out_txd, coat, mane, reed)
     print('cavalo.dff: %d vertices, %d ossos -> %s (%d bytes)' % (len(pts), len(keep), out_dff, os.path.getsize(out_dff)))
