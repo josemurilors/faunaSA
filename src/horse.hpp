@@ -355,7 +355,12 @@ void ClampAim(CPed* player, float horseHeading, unsigned now, bool aiming) {
 }
 
 CAnimBlendAssociation* PlayRider(CPed* p, CAnimBlendHierarchy* a, float blend) {
-    CAnimBlendAssociation* as = Play(p, a, 30.0f); // mistura quase instantanea: sem afundar no cavalo
+    // Entrando com outra animacao de cavaleiro ja tocando (troca de marcha), mistura de verdade: o peso total fica em 1 e o CJ nao afunda.
+    // Sem nenhuma, quase instantanea: com o peso total abaixo de 1 o corpo afundaria no cavalo.
+    bool haveRider = false;
+    for (CAnimBlendAssociation* o = RpAnimBlendClumpGetFirstAssociation(p->m_pRwClump); o; o = RpAnimBlendGetNextAssociation(o))
+        if (IsRiderHier(o->m_pHierarchy) && o->m_pHierarchy != a && o->m_fBlendAmount > 0.5f) haveRider = true;
+    CAnimBlendAssociation* as = Play(p, a, haveRider ? blend : 30.0f);
     KeepOnly(p, as);
     return as;
 }
@@ -539,7 +544,7 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
         }
     } else {
         KeepAimBase(player, false);
-        ar = PlayRider(player, rider, 8.0f);
+        ar = PlayRider(player, rider, 4.5f);
         for (CAnimBlendAssociation* a = RpAnimBlendClumpGetFirstAssociation(player->m_pRwClump); a; a = RpAnimBlendGetNextAssociation(a))
             if (IsLegsHier(a->m_pHierarchy)) a->m_fBlendDelta = -8.0f;
     }
@@ -606,10 +611,28 @@ void ShotDiag(CPed* player, unsigned now) {
         cam.m_vecSource.z, cam.m_vecFront.z);
 }
 
+// Diagnostico do tiro montado (ate 200 linhas, a cada 300 ms com mira ou tiro apertado): por que o jogo nao atira. Uma linha mostra a arma,
+// o estado dela, os botoes e a tarefa de usar arma (comando pedido/atual, se terminou, qual animacao tocou).
+void FireDiag(CPed* player, unsigned now, CPad* pad) {
+    static unsigned last = 0;
+    static int lines = 0;
+    if (lines >= 200 || !gRiding || now - last < 300) return;
+    if (!(pad->NewState.RightShoulder1 > 0 || pad->NewState.ButtonCircle > 0)) return;
+    last = now; ++lines;
+    CWeapon* w = player->GetWeapon();
+    CTaskSimpleUseGun* t = player->m_pIntelligence ? player->m_pIntelligence->GetTaskUseGun() : nullptr;
+    Log("FIREDIAG slot=%d escolhida=%d tipo=%d estado=%d clip=%u total=%u mira(RS1)=%d fogo(Circulo)=%d bIsAiming=%d bFiring=%d move=%d agachado=%d bracoBloq=%d tarefa=%d cmd=%d/%d fim=%d anim=%08X",
+        (int)player->m_nSelectedWepSlot, player->m_pPlayerData ? (int)player->m_pPlayerData->m_nChosenWeapon : -1, (int)w->m_eWeaponType, (int)w->m_nState,
+        w->m_nAmmoInClip, w->m_nAmmoTotal, (int)pad->NewState.RightShoulder1, (int)pad->NewState.ButtonCircle, (int)player->bIsAimingGun, (int)player->bFiringWeapon,
+        (int)player->m_nMoveState, (int)player->bIsDucking, (int)player->bDuckRightArmBlocked, t ? 1 : 0, t ? (int)t->m_nLastCommand : -1, t ? (int)t->m_nNextCommand : -1,
+        t ? (int)t->m_bIsFinished : -1, (t && t->m_pAnim && t->m_pAnim->m_pHierarchy) ? t->m_pAnim->m_pHierarchy->m_hashKey : 0);
+}
+
 void UpdateHorses(unsigned now, CPed* player) {
     if (!gHorseInit) InitHorse();
     if (!gHorseOn) return;
     ShotDiag(player, now);
+    FireDiag(player, now, CPad::GetPad(0));
     static unsigned last = 0;
     float dt = last ? std::min(0.1f, (now - last) / 1000.0f) : 0.0f;
     last = now;

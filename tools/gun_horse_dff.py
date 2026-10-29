@@ -46,6 +46,24 @@ def mat_row(R, t):
     """matriz de 12 floats do frame RW (3 linhas + posicao) a partir de rotacao coluna R"""
     return struct.pack('<12f', *[R[c][r] for r in range(3) for c in range(3)], *t)    # linhas = colunas de R (convencao vetor-linha)
 
+def darken(d, f):
+    """textura DXT mais escura sem recodificar: escala as duas cores de cada bloco (DXT1: 8 bytes; DXT5: cores nos 8 ultimos de 16)"""
+    def c565(v): return [((v >> 11) & 31) * 255 // 31, ((v >> 5) & 63) * 255 // 63, (v & 31) * 255 // 31]
+    def p565(c): return ((c[0] * 31 // 255) << 11) | ((c[1] * 63 // 255) << 5) | (c[2] * 31 // 255)
+    bs = 8 if d['kind'] == 1 else 16; o = bs - 8
+    out = dict(d); out['levels'] = []
+    for lv in d['levels']:
+        b = bytearray(lv)
+        for i in range(0, len(b) - 7, bs):
+            c0, c1 = struct.unpack_from('<HH', b, i + o)
+            n0, n1 = p565([int(x * f) for x in c565(c0)]), p565([int(x * f) for x in c565(c1)])
+            if d['kind'] == 1 and (c0 > c1) != (n0 > n1):      # DXT1: a ordem das cores escolhe o modo (4 cores ou 3 + transparente)
+                if c0 > c1: n0 = max(n0, n1 + 1) if n1 < 0xffff else n0
+                else: n1 = max(n1, n0 + 1) if n0 < 0xffff else n1
+            struct.pack_into('<HH', b, i + o, n0, n1)
+        out['levels'].append(bytes(b))
+    return out
+
 # ---------------------------------------------------------------- malha
 def load_skin(pak, name):
     dados, (o, s, nome) = gun_model.acha(pak, name, '.skin')
@@ -90,8 +108,10 @@ def build(pak, orig_dff, out_dff, out_txd, coat='horse', mane='horse_mane', reed
     # (skin, bloco de textura, indice da difusa no bloco: no corpo a ordem e normal, difusa, especular)
     parts = [('horse\\horse.skin', coat + '.tex', 1, 'horse'), ('horse_saddle.skin', 'horse_saddle.tex', 0, 'horse_saddle'),
              (mane + '.skin', mane + '.tex', 0, 'horse_mane')]     # na crina a ordem e difusa (DXT5 com alfa), normal, especular
-    if reed: parts = [('horse_reed.skin', 'horse_reed.tex', 2, 'horse')]
-    paks = [reed or pak] * len(parts)
+    paks = [pak] * len(parts)
+    if reed:    # corpo do Reed (so o corpo vem na cutscene) + sela e crina/cauda do cavalo comum, escurecidas
+        parts = [('horse_reed.skin', 'horse_reed.tex', 2, 'horse')] + parts[1:]
+        paks[0] = reed
     pts, uvs, wts, bidx, tris, tnames = [], [], [], [], [], []
     for mi, (skin, tex, tix, tname) in enumerate(parts):
         vs, tr = load_skin(paks[mi], skin)
@@ -156,7 +176,9 @@ def build(pak, orig_dff, out_dff, out_txd, coat='horse', mane='horse_mane', reed
     atomic = chunk(0x14, struct_(struct.pack('<IIII', 0, 0, 5, 0)) + aext)
     clump = chunk(0x10, struct_(struct.pack('<III', 1, 0, 0)) + framelist + geoms + atomic + ext())
     open(out_dff, 'wb').write(clump)
-    open(out_txd, 'wb').write(gun_tex.txd([(tn, gun_tex.le_tex(pk, tex)[tix]) for pk, (_, tex, tix, tn) in zip(paks, parts)]))
+    texs = [(tn, gun_tex.le_tex(pk, tex)[tix]) for pk, (_, tex, tix, tn) in zip(paks, parts)]
+    if reed: texs = [(tn, darken(d, 0.3) if tn != 'horse' else d) for tn, d in texs]
+    open(out_txd, 'wb').write(gun_tex.txd(texs))
     return pts, parts, keep, tris, normals
 
 if __name__ == '__main__':
