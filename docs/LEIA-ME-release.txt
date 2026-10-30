@@ -17,7 +17,6 @@ INSTALACAO
 CAVALO
 - Os arquivos do cavalo (New Horse Mod, de nadalao e outros; modelo, animacoes e sons) vao neste zip: modloader\FaunaSA e FaunaSA\horse.
 - Para desligar o cavalo: [Horse] Enabled=0 no FaunaSA.ini. Se apagar esses arquivos, ele fica desligado e o resto funciona normalmente.
-- Problema conhecido: montado, as balas saem mais baixas que a mira.
 
 SE ALGO DER ERRADO
 - O arquivo FaunaSA.log (na pasta do jogo) registra modelos, spawns e falhas.

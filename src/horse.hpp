@@ -1,3 +1,9 @@
+#include "horse_rear.hpp"
+// Depuracao do tiro: guarda o ultimo disparo para desenhar marcadores na tela (DrawShotDebug, chamado de DrawMenu) por 4 s.
+struct ShotDbg { CVector muzzle, tgt, gameTgt; unsigned at = 0; } gShotDbg;
+void DrawShotDebug();
+float gAimFov = 0.0f; // campo de visao desenhado (apos o zoom da mira), para tracar a mira do tiro
+constexpr float kRearBack = 0.3f; // fracao do recuo da tabela do Gun (horse_rear.hpp) aplicada ao CJ no empinar
 // Cavalo: adaptacao do "New Horse Mod" de nadalao (cavalo.cs) para o ASI. Incluido DENTRO do namespace anonimo de main.cpp
 // (usa Log, ModelRef, EnsureLoaded, BuildHierarchy, Toast...). Assets: modloader\FaunaSA\gta3.img\cavalo.dff/.txd (modelo) e
 // FaunaSA\horse\horse_animation.ifp + cavalo*.mp3. Regras e numeros tirados do script original (decompilado):
@@ -23,8 +29,8 @@ enum class HState { Idle, Mounting, Riding, Dismounting };
 struct Horse {
     CPed* ped = nullptr;
     HState st = HState::Idle;
-    float x = 0, y = 0, z = 0, heading = 0, speed = 0, vz = 0, groundZ = 0, boneRest = 0;
-    bool boneRestSet = false;
+    float x = 0, y = 0, z = 0, heading = 0, speed = 0, vz = 0, groundZ = 0, boneRest = 0, boneRestFwd = 0, tnx = 0, tny = 0, tnz = 1; // tn: normal do terreno (suavizada)
+    bool boneRestSet = false, boneMoves = false, approaching = false;
     bool jumping = false, stepSounded = false;
     unsigned t0 = 0, jumpT0 = 0, idleT0 = 0, nextKick = 0, kickUntil = 0, deadSince = 0, farSince = 0, exitT0 = 0;
 };
@@ -119,6 +125,9 @@ void HorseSound(const char* file, const CVector& pos) {
 
 // O controle do jogador fica LIGADO enquanto monta (camera livre, mira e tiro nativos); so a posicao e a sela sao nossas.
 bool IsRiderHier(const CAnimBlendHierarchy* h);
+void FireMounted(CPed* player, CPad* pad, unsigned now);
+void AimPose(CPed* player, unsigned now);
+void AimPoseOff(CPed* player);
 
 void SetRiderFree(CPed* player) {
     if (player->m_pRwClump)
@@ -129,6 +138,8 @@ void SetRiderFree(CPed* player) {
     player->bUsesCollision = true;
     player->bApplyGravity = true;
     player->bDontApplySpeed = false;
+    player->bNotAllowedToDuck = false;
+    CPad::GetPad(0)->bDisablePlayerDuck = 0;
     gAiming = false;
     gRiding = false; gRider = -1;
 }
@@ -165,13 +176,32 @@ bool SpawnHorse(int i, float x, float y, float groundZ, float headingDeg, unsign
 
 // Poe o jogador ao lado/na sela do cavalo: origem no cavalo (+ dx para a direita dele); a raiz das animacoes do pacote ja sobe e
 // recua o corpo ate a sela (sit: 0,55 m acima e 0,33 m atras).
+// Eixos do cavalo inclinados pelo terreno: direita, frente e cima (cima = normal suavizada do chao; plano, e o rumo puro).
+struct HorseAxes { float r[3], f[3], u[3]; };
+HorseAxes AxesOf(const Horse& h, float heading) {
+    float fx = -std::sin(heading), fy = std::cos(heading);
+    HorseAxes a{};
+    a.u[0] = h.tnx; a.u[1] = h.tny; a.u[2] = h.tnz;
+    a.r[0] = fy * a.u[2]; a.r[1] = -fx * a.u[2]; a.r[2] = fx * a.u[1] - fy * a.u[0]; // frente0 x cima
+    float l = std::sqrt(a.r[0] * a.r[0] + a.r[1] * a.r[1] + a.r[2] * a.r[2]);
+    for (float& c : a.r) c /= l;
+    a.f[0] = a.u[1] * a.r[2] - a.u[2] * a.r[1]; a.f[1] = a.u[2] * a.r[0] - a.u[0] * a.r[2]; a.f[2] = a.u[0] * a.r[1] - a.u[1] * a.r[0]; // cima x direita
+    return a;
+}
+void TiltPed(CPed* p, const HorseAxes& a) {
+    CMatrix& m = *p->m_matrix;
+    m.right = CVector(a.r[0], a.r[1], a.r[2]); m.up = CVector(a.f[0], a.f[1], a.f[2]); m.at = CVector(a.u[0], a.u[1], a.u[2]);
+}
+
 void PlaceRider(CPed* player, const Horse& h, float dx, float lift = 0.0f, float back = 0.0f) {
-    float cs = std::cos(h.heading), sn = std::sin(h.heading);
-    // dx: para a direita do cavalo; back: para tras (frente do cavalo = (-sin, cos))
-    player->SetPosition(h.x + cs * dx + sn * back, h.y + sn * dx - cs * back, h.z + 0.05f + lift);
+    // dx: para a direita do cavalo; back: para tras; lift: para cima (no referencial inclinado do cavalo)
+    HorseAxes a = AxesOf(h, h.heading);
+    float up = 0.05f + lift;
+    player->SetPosition(h.x + a.r[0] * dx - a.f[0] * back + a.u[0] * up, h.y + a.r[1] * dx - a.f[1] * back + a.u[1] * up, h.z + a.r[2] * dx - a.f[2] * back + a.u[2] * up);
     if (!gAiming) { // mirando, o CJ gira pela camera; senao olha para onde o cavalo vai
         player->SetHeading(h.heading);
         player->m_fHeadingCurrent = player->m_fHeadingGoal = h.heading;
+        TiltPed(player, a);
     } else {
         // mirando o jogo so atualiza o rumo (m_fHeadingCurrent); a matriz do ped so e refeita quando ele esta "no controle", e com colisao,
         // gravidade e velocidade desligados isso pode nao acontecer: o corpo ficaria no rumo antigo e o braco apontaria para o lado
@@ -190,11 +220,11 @@ bool IsHorseAnim(const CAnimBlendHierarchy* h) {
     for (const auto& kv : gHorseAnim) if (kv.second == h) return true;
     return false;
 }
-CAnimBlendAssociation* PlayHorse(CPed* p, CAnimBlendHierarchy* a) {
+CAnimBlendAssociation* PlayHorse(CPed* p, CAnimBlendHierarchy* a, float blend = 4.0f) {
     bool first = true;
     for (CAnimBlendAssociation* o = RpAnimBlendClumpGetFirstAssociation(p->m_pRwClump); o; o = RpAnimBlendGetNextAssociation(o))
         if (IsHorseAnim(o->m_pHierarchy)) first = false;
-    CAnimBlendAssociation* as = Play(p, a, first ? 1000.0f : 4.0f);
+    CAnimBlendAssociation* as = Play(p, a, first ? 1000.0f : blend);
     if (as && first) as->m_fBlendAmount = 1.0f;
     for (CAnimBlendAssociation* o = RpAnimBlendClumpGetFirstAssociation(p->m_pRwClump); o; o = RpAnimBlendGetNextAssociation(o))
         if (o != as && !IsHorseAnim(o->m_pHierarchy)) { o->m_fBlendAmount = 0.0f; o->m_fBlendDelta = 0.0f; }
@@ -398,11 +428,33 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
         ped->m_vecMoveSpeed = CVector(0.0f, 0.0f, 0.0f);
         // montar: a pe, a 3 m, tecla de entrar no veiculo
         if (!gRiding && !player->bInVehicle && player->m_fHealth > 0.0f && pd < kHorseMountDist) {
-            if (now >= gHintAt) { // caixa de ajuda preta do proprio jogo; repete a cada 9 s enquanto estiver perto
+            if (!h.approaching && now >= gHintAt) { // caixa de ajuda preta do proprio jogo; repete a cada 9 s enquanto estiver perto
                 CHud::SetHelpMessage("Aperte ~k~~VEHICLE_ENTER_EXIT~ para montar no cavalo.", true, false, false);
                 gHintAt = now + 9000;
             }
-            if (useHit) {
+            // O CJ anda ate o ponto de subida (1 m ao lado do cavalo, o mesmo onde a animacao de montar comeca) em vez de se teletransportar
+            if (useHit && !h.approaching) { h.approaching = true; h.t0 = now; gHintAt = 0; Log("cavalo %d: CJ indo ate o cavalo", i); }
+            bool arrived = false;
+            if (h.approaching) {
+                CVector pp2 = player->GetPosition();
+                float tx = h.x + std::cos(h.heading), ty = h.y + std::sin(h.heading);
+                float ex = tx - pp2.x, ey = ty - pp2.y, ed = std::hypot(ex, ey);
+                if (ed < 0.3f || now - h.t0 > 4000) arrived = true;
+                else {
+                    pad->NewState.LeftStickX = 0; pad->NewState.LeftStickY = 0; // o jogo nao empurra o CJ para outro lado
+                    float step = std::min(ed, 1.7f * dt), hd = std::atan2(-ex, ey);
+                    player->SetPosition(pp2.x + ex / ed * step, pp2.y + ey / ed * step, pp2.z);
+                    player->SetHeading(hd); player->m_fHeadingCurrent = player->m_fHeadingGoal = hd;
+                    // A tarefa do jogador volta a tocar o idle a cada frame (peso dividido, o CJ deslizava parado): andar entra com peso cheio
+                    // e as demais animacoes do CJ ficam zeradas
+                    if (CAnimBlendAssociation* wa = CAnimManager::BlendAnimation(player->m_pRwClump, player->m_nAnimGroup, 0 /* ANIM_ID_WALK */, 8.0f)) {
+                        wa->m_fBlendAmount = 1.0f; wa->m_fBlendDelta = 0.0f;
+                        KeepOnly(player, wa);
+                    }
+                }
+            }
+            if (arrived) {
+                h.approaching = false;
                 player->bUsesCollision = false;
                 player->bApplyGravity = false; // senao o CJ "quica" para baixo do cavalo: a gravidade puxa entre um SetPosition e outro
                 player->bDontApplySpeed = true;
@@ -411,14 +463,25 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
                 gHintAt = 0;
                 Log("cavalo %d: montando", i);
             }
-        } else if (pd > 6.0f) {
-            gHintAt = 0; // longe: a dica volta a aparecer quando chegar perto de novo
+        } else {
+            h.approaching = false;
+            if (pd > 6.0f) gHintAt = 0; // longe: a dica volta a aparecer quando chegar perto de novo
         }
         return;
     }
 
     // ---- com cavaleiro
     if (player->m_fHealth <= 0.0f || player->bInVehicle) { SetRiderFree(player); h.st = HState::Idle; h.speed = 0; return; }
+    // agachar montado "deita" o CJ e o jogo para de criar o comando de tiro (log: agachado=1, cmd=255): a tecla e a tarefa de agachar ficam desligadas
+    player->bNotAllowedToDuck = true;
+    CPad::GetPad(0)->bDisablePlayerDuck = 1;
+    if (player->bIsDucking) { player->m_pIntelligence->ClearTaskDuckSecondary(); player->bIsDucking = false; }
+    // montado so se usa a mao (slot 0) e a pistola (slot 2): outra arma escolhida volta para a pistola (ou para a mao, sem pistola)
+    if (player->m_pPlayerData && player->m_nSelectedWepSlot != 0 && player->m_nSelectedWepSlot != 2) {
+        int to = player->m_aWeapons[2].m_eWeaponType ? 2 : 0;
+        player->SetCurrentWeapon(to);
+        player->m_pPlayerData->m_nChosenWeapon = (unsigned char)to;
+    }
     player->m_vecMoveSpeed = CVector(0.0f, 0.0f, 0.0f);
     if (player->m_pPlayerData) player->m_pPlayerData->m_fTimeCanRun = 1000.0f; // correr/galopar nao cansa o CJ (ele caia da sela)
     if (h.st == HState::Mounting) {
@@ -493,25 +556,78 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     } else {
         h.z = h.groundZ + kHorseCenter;
     }
+    {   // diagnostico: a matriz do cavalo que o jogo deixou no frame anterior x a inclinacao que gravamos (ate 40 linhas, so em ladeira)
+        static int lines = 0;
+        if (lines < 40 && ped->m_matrix && h.tnz < 0.97f) { ++lines; Log("TILTDIAG gravado.z=%.3f lido.z=%.3f frente.z=%.3f", h.tnz, ped->m_matrix->at.z, ped->m_matrix->up.z); }
+    }
+    if (!h.jumping) { // o cavalo acompanha a inclinacao do terreno: 4 pontos de chao em volta (frente/tras 1,1 m, lados 0,45 m)
+        float fx = -std::sin(h.heading), fy = std::cos(h.heading), rx = fy, ry = -fx;
+        auto gz = [&](float ox, float oy) {
+            bool ok = false;
+            float z = CWorld::FindGroundZFor3DCoord(h.x + ox, h.y + oy, h.groundZ + 1.5f, &ok, nullptr);
+            return ok ? z : h.groundZ;
+        };
+        // 4 cantos (patas): inclinacao para a frente e para o lado do plano que passa por eles; o chao medio vira a altura do cavalo
+        const float L = 1.0f, W = 0.4f;
+        float zfl = gz(fx * L - rx * W, fy * L - ry * W), zfr = gz(fx * L + rx * W, fy * L + ry * W);
+        float zbl = gz(-fx * L - rx * W, -fy * L - ry * W), zbr = gz(-fx * L + rx * W, -fy * L + ry * W);
+        float sf = std::clamp(((zfl + zfr) - (zbl + zbr)) / (4 * L), -0.9f, 0.9f);
+        float sr = std::clamp(((zfr + zbr) - (zfl + zbl)) / (4 * W), -0.9f, 0.9f);
+        float tx = -sf * fx - sr * rx, ty = -sf * fy - sr * ry, tl = std::sqrt(tx * tx + ty * ty + 1.0f);
+        float k = std::min(1.0f, 14.0f * dt);
+        h.tnx += (tx / tl - h.tnx) * k; h.tny += (ty / tl - h.tny) * k; h.tnz += (1.0f / tl - h.tnz) * k;
+        float n = std::sqrt(h.tnx * h.tnx + h.tny * h.tny + h.tnz * h.tnz);
+        h.tnx /= n; h.tny /= n; h.tnz /= n;
+    }
     ped->SetPosition(h.x, h.y, h.z);
     ped->SetHeading(h.heading);
     ped->m_fHeadingCurrent = ped->m_fHeadingGoal = h.heading;
+    HorseAxes ax = AxesOf(h, h.heading);
+    TiltPed(ped, ax);
     ped->m_vecMoveSpeed = CVector(0.0f, 0.0f, 0.0f);
     // o CJ acompanha o pulo: sobe um pouco da sela no meio do salto
     float lift = h.jumping ? 0.18f * std::sin(3.14159265f * std::min(1.0f, (now - h.jumpT0) / 900.0f)) : 0.0f;
+    // (no empinar a raiz de sit_kick ja acompanha a sela)
     // o corpo do cavalo sobe e desce a cada passo: o CJ acompanha a coluna do cavalo (senao "quica" em relacao a sela)
     RwV3d spine{};
-    ped->GetBonePosition(spine, 2, false);
-    if (!h.boneRestSet) { h.boneRest = spine.z - h.z; h.boneRestSet = true; }
-    if (!h.jumping) lift += std::clamp((spine.z - h.z) - h.boneRest, -0.2f, 0.2f);
+    ped->GetBonePosition(spine, 2, true); // true: com false o osso vinha desatualizado (sempre o repouso)
+    // osso da sela no referencial do cavalo (inclinado): para cima e para a frente
+    float dX = spine.x - h.x, dY = spine.y - h.y, dZ = spine.z - h.z;
+    float sUp = dX * ax.u[0] + dY * ax.u[1] + dZ * ax.u[2], sFwd = dX * ax.f[0] + dY * ax.f[1] + dZ * ax.f[2];
+    if (!h.boneRestSet) { h.boneRest = sUp; h.boneRestFwd = sFwd; h.boneRestSet = true; }
+    // Empinando, a sela sobe e recua num arco (ate ~1 m): o CJ (raiz fixa em sit_kick) segue o osso da sela em tempo real, em vez de um caminho
+    // gravado na animacao que nao acompanha o fade nem o tempo do cavalo
+    float seatBack = 0.0f;
+    if (!h.jumping && now < h.kickUntil && !aiming) {
+        // Empinando, a sela recua ate ~1,4 m e sobe: o deslocamento vem da tabela da animacao do Gun (horse_rear.hpp), pelo tempo do coice
+        // (o osso da sela lido no jogo nao se move aqui: log REARDIAG antigo, sobe=0.00)
+        float u = std::clamp((float)(now - (h.kickUntil - 1130)) / 1000.0f / kRearDur, 0.0f, 1.0f) * (kRearN - 1);
+        int i0 = std::min((int)u, kRearN - 2); float fr = u - i0;
+        float up = kRear[i0][2] + (kRear[i0 + 1][2] - kRear[i0][2]) * fr, fw = kRear[i0][1] + (kRear[i0 + 1][1] - kRear[i0][1]) * fr;
+        // Preferencia: o osso da sela medido agora (e o que o cavalo faz de verdade); a tabela fica de reserva se o osso nao se mexe
+        float bUp = sUp - h.boneRest, bBack = h.boneRestFwd - sFwd;
+        if (std::fabs(bUp) + std::fabs(bBack) > 0.03f) h.boneMoves = true;
+        // O osso da sela (2) so sobe (~0,3 m) e quase nao recua, mas a sela de verdade recua: com so o osso o CJ entrava no cavalo, com a tabela
+        // inteira (1,4 m) ficava ~1 m atras da sela (foto). A subida vem do osso e o recuo e 30% da tabela (kRearBack).
+        if (h.boneMoves) up = bUp;
+        fw *= kRearBack;
+        static unsigned lastLog = 0; static int logs = 0;
+        if (logs < 60 && now - lastLog > 100) { lastLog = now; ++logs; Log("REARDIAG2 osso: sobe=%.2f recua=%.2f tabela: sobe=%.2f recua=%.2f usando=%s", bUp, bBack, kRear[i0][2], -kRear[i0][1], h.boneMoves ? "osso" : "tabela"); }
+        lift += up; seatBack = -fw;
+    }
+    else if (!h.jumping && now >= h.kickUntil) lift += std::clamp(sUp - h.boneRest, -0.2f, 0.2f);
     // Mirando, o CJ fica na pose em pe do jogo (sem a raiz que o "senta" na sela): sobe 0,45 m e recua 0,3 m, senao o tronco afunda no cavalo
     // O jogo faz "coronhada" (GUN_BUTT) se ha um ped vivo a menos de 1 m na frente do CJ: o cavalo, colado nele. Com a origem do CJ exatamente
     // na do cavalo o vetor CJ->cavalo e nulo e a checagem (produto escalar > 0) falha; por isso, mirando, sem deslocamento lateral nem para tras.
     // Mirando a raiz e a pelve sao as da base de mira (em pe); sobe 0,61 m (quadril a altura da sela do Gun) e as pernas sentadas vem de sitl_*.
-    PlaceRider(player, h, aiming ? 0.0f : -0.05f, lift + (aiming ? 0.61f : 0.0f));
+    PlaceRider(player, h, aiming ? 0.0f : -0.05f, lift + (aiming ? 0.61f : 0.0f), seatBack);
     player->bIsStanding = true; player->bWasStanding = true; player->bIsInTheAir = false; player->bIsLanding = false; // colisao desligada: sem isso o jogo acha que ele esta no ar
     AlignGun(player, aiming);
     ClampAim(player, h.heading, now, aiming);
+    if (aiming) { FireMounted(player, pad, now); AimPose(player, now); } else AimPoseOff(player);
+    // AlignGun/ClampAim refazem a matriz do CJ so com o rumo (em pe): por ultimo ele volta a se inclinar com o cavalo, no rumo em que ficou (mirando,
+    // o rumo e o da camera); sem isso, em ladeira o corpo ficava reto enquanto o quadril acompanhava a sela inclinada
+    if (player->m_matrix) TiltPed(player, AxesOf(h, std::atan2(-player->m_matrix->up.x, player->m_matrix->up.y)));
 
     // animacao pela velocidade; o ciclo toca na velocidade do chao (legs/speed) para o casco nao deslizar
     CAnimBlendHierarchy *horse, *rider;
@@ -519,14 +635,16 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
     int g = mm::gait(h.speed);
     const char* rn = "sit";
     if (h.jumping) { horse = HA("horse_jump") ? HA("horse_jump") : HA("horse_kick_forward"); rn = "sit_run"; }
-    else if (now < h.kickUntil) horse = HA("horse_kick_forward");
+    else if (now < h.kickUntil) { horse = HA("horse_kick_forward"); if (!aiming && HA("sit_kick")) rn = "sit_kick"; } // o CJ empina junto (gun_h_trample)
     else if (g == 0) horse = HA("horse_idle");
     else if (g == 1) { horse = HA("horse_walk"); rn = "sit_walk"; native = kHorseWalk; }
     else if (g == 2) { horse = HA("horse_run"); rn = "sit_run"; native = kHorseRun; }
     else { horse = HA("horse_sprint"); rn = "sit_galop"; native = kHorseSprint; }
     rider = HA(rn);
     float rate = native > 0.0f ? std::clamp(h.speed / native, 0.6f, 1.6f) : 1.0f;
-    CAnimBlendAssociation* ah = PlayHorse(ped, horse);
+    // No empinar a mistura e instantanea: a animacao ja entra e sai da pose parada (FADE) e a tabela do CJ (horse_rear.hpp) supoe o cavalo na pose cheia
+    bool rearing = !h.jumping && now < h.kickUntil;
+    CAnimBlendAssociation* ah = PlayHorse(ped, horse, rearing ? 1000.0f : 4.0f);
     // Mirando, a pose de sela vira pose em pe com a mira do jogo (misturar as duas deitava o CJ); so se zeram os passos
     CAnimBlendAssociation* ar = nullptr;
     if (aiming) {
@@ -544,7 +662,7 @@ void UpdateHorse(int i, unsigned now, float dt, CPed* player, CPad* pad, bool us
         }
     } else {
         KeepAimBase(player, false);
-        ar = PlayRider(player, rider, 4.5f);
+        ar = PlayRider(player, rider, rearing ? 1000.0f : 4.5f);
         for (CAnimBlendAssociation* a = RpAnimBlendClumpGetFirstAssociation(player->m_pRwClump); a; a = RpAnimBlendGetNextAssociation(a))
             if (IsLegsHier(a->m_pHierarchy)) a->m_fBlendDelta = -8.0f;
     }
@@ -584,6 +702,7 @@ void UpdateAimZoom(float dt, CPed* player) {
     } else {
         lastWritten = 0.0f;
     }
+    gAimFov = CDraw::ms_fFOV;
 }
 
 // Um passo por frame: nasce/some os cavalos dos locais, atualiza cada um. useHit/jumpHit: tecla pressionada neste frame.
@@ -628,6 +747,156 @@ void FireDiag(CPed* player, unsigned now, CPad* pad) {
         t ? (int)t->m_bIsFinished : -1, (t && t->m_pAnim && t->m_pAnim->m_pHierarchy) ? t->m_pAnim->m_pHierarchy->m_hashKey : 0);
 }
 
+// Pose de mira da pistola (a animacao do pacote Enhanced, parcial so do tronco/bracos): a tarefa de arma do jogo nao roda montado (bIsAiming=0, sem
+// IK de braco), entao os bracos ficavam caidos. Aqui a animacao de tiro do grupo da arma fica parada no inicio do laco (a pose de mira) e toca
+// inteira a cada tiro, como a tarefa faria. Ao soltar a mira ela sai de cena.
+unsigned gShotAt = 0;
+void AimPose(CPed* player, unsigned now) {
+    CWeapon* w = player->GetWeapon();
+    CWeaponInfo* wi = w->m_eWeaponType ? CWeaponInfo::GetWeaponInfo(w->m_eWeaponType, 0) : nullptr;
+    // A 9mm do jogo (22) e a unica pistola sem animacao do Enhanced: montada ela toca a pose da Desert Eagle (24, grupo python), igual as outras;
+    // o tiro continua sendo o da 9mm (so a animacao e emprestada).
+    if (w->m_eWeaponType == 22) { if (CWeaponInfo* de = CWeaponInfo::GetWeaponInfo((eWeaponType)24, 0)) wi = de; }
+    if (!wi || wi->m_nSlot != 2 || !player->m_pRwClump) return;
+    CAnimBlendAssociation* a = CAnimManager::BlendAnimation(player->m_pRwClump, (int)wi->m_nAnimToPlay, 224, 8.0f);
+    if (!a) return;
+    float start = wi->m_fAnimLoopStart, end = std::max(wi->m_fAnimLoopEnd, start + 0.1f);
+    static int logs = 0;
+    if (logs++ < 3) Log("AIMPOSE grupo=%d laco=%.2f..%.2f duracao=%.2f", (int)wi->m_nAnimToPlay, start, end, a->m_pHierarchy ? a->m_pHierarchy->m_fTotalTime : -1.0f);
+    bool shooting = gShotAt && now - gShotAt < (unsigned)((end - start) * 1000.0f);
+    a->m_fSpeed = shooting ? 1.0f : 0.0f;
+    if (!shooting) a->m_fCurrentTime = start;
+    // a tarefa de arma (parada, sem alvo) tambem mexe no peso desta animacao: o peso e o marcador de remocao ficam por nossa conta
+    a->m_fBlendAmount = 1.0f; // (log: o peso ficava em ~0,55: algo o reduzia a cada frame)
+    a->m_fBlendDelta = 0.0f;
+    static unsigned lastAim = 0; static int aimLines = 0;
+    if (aimLines < 15 && now - lastAim > 500) { lastAim = now; ++aimLines; Log("AIMPOSE2 peso=%.2f tempo=%.2f vel=%.1f flags=%04X atirando=%d", a->m_fBlendAmount, a->m_fCurrentTime, a->m_fSpeed, (unsigned)a->m_nFlags, (int)shooting); }
+}
+void AimPoseOff(CPed* player) {
+    if (!player->m_pRwClump) return;
+    if (CAnimBlendAssociation* a = RpAnimBlendClumpGetAssociation(player->m_pRwClump, 224u)) { a->m_fSpeed = 1.0f; a->m_fBlendDelta = -8.0f; }
+}
+
+// O jogo processa o comando de tiro do jogador montado (FIREDIAG: cmd=2) mas nunca chama o disparo (municao fixa, bFiringWeapon=0): aqui a arma e
+// disparada direto, como CTaskSimpleUseGun::FireGun (origem na mao, boca pelo offset da arma). CWeapon::Fire cuida da cadencia, da municao e do
+// recarregar; o tiro do jogador sai ao longo do eixo da camera. So pistolas (slot 2): as demais armas nao atiram montado.
+void FireMounted(CPed* player, CPad* pad, unsigned now) {
+    CWeapon* w = player->GetWeapon();
+    int type = (int)w->m_eWeaponType;
+    CWeaponInfo* wi = type ? CWeaponInfo::GetWeaponInfo(w->m_eWeaponType, 0) : nullptr;
+    // Recarga: como nao rodamos o comando de recarga do jogo, o pente vazio podia ficar em recarga (estado 2) sem voltar. Passados 2,2 s o pente e
+    // refeito aqui (se o jogo completar antes, o estado muda e o relogio zera).
+    static unsigned reloadSince = 0;
+    if (wi && wi->m_nSlot == 2 && (int)w->m_nState == 2 && w->m_nAmmoInClip == 0 && w->m_nAmmoTotal > 0) {
+        if (!reloadSince) reloadSince = now;
+        else if (now - reloadSince > 2200) { w->m_nAmmoInClip = (unsigned)std::min<unsigned>(w->m_nAmmoTotal, wi->m_nAmmoClip); w->m_nState = (decltype(w->m_nState))0; reloadSince = 0; }
+    } else reloadSince = 0;
+    static int presses = 0;
+    if (pad->NewState.ButtonCircle > 0 && pad->OldState.ButtonCircle <= 0 && presses++ < 40)
+        Log("FIREMOUNTED clique: tipo=%d info=%d mira(RS1)=%d tipoDeFogo=%d estado=%d clip=%u", type, wi ? 1 : 0, (int)pad->NewState.RightShoulder1, wi ? (int)wi->m_nWeaponFire : -1, (int)w->m_nState, w->m_nAmmoInClip);
+    if (!wi || wi->m_nSlot != 2 || pad->NewState.RightShoulder1 <= 0 || pad->NewState.ButtonCircle <= 0) return;
+    static int skipped = 0;
+    if ((wi->m_nWeaponFire != 1 || (int)w->m_nState == 2) && skipped++ < 20) Log("FIREMOUNTED ignorado: tipo=%d tipoDeFogo=%u estado=%d", type, wi->m_nWeaponFire, (int)w->m_nState);
+    if (wi->m_nWeaponFire != 1 || (int)w->m_nState == 2) return;
+    if (pad->OldState.ButtonCircle > 0) return; // pistola: um tiro por clique
+    RwV3d hand{}, m{ wi->m_vecFireOffset.x, wi->m_vecFireOffset.y, wi->m_vecFireOffset.z };
+    player->GetBonePosition(hand, 24, false);
+    player->GetTransformedBonePosition(m, 24, false);
+    CVector origin(hand.x, hand.y, hand.z + wi->m_vecFireOffset.z + 0.15f), muzzle(m.x, m.y, m.z);
+    // Alvo: onde o eixo da camera (a mira) encontra o mundo. Sem alvo o jogo calculava a trajetoria pelo eixo da camera a partir da boca da arma
+    // e as balas saiam abaixo da mira (bug da 1.0.0): com o ponto de impacto dado, a bala vai da boca direto ate a mira.
+    CCam& cam = TheCamera.m_aCams[TheCamera.m_nActiveCam];
+    // A mira desenhada NAO fica no centro da tela: o jogo a poe em (CHairMultX, CHairMultY) = (0,53, 0,4) da tela (acima do centro). O raio da mira e o do
+    // centro mais esse desvio, com o campo de visao que esta sendo desenhado (o zoom da mira mexe nele). Atirar pelo centro mandava a bala abaixo da mira.
+    float W = (float)RsGlobal.maximumWidth, H = (float)RsGlobal.maximumHeight;
+    float fov = gAimFov > 1.0f ? gAimFov : CDraw::ms_fFOV, tanH = std::tan(fov * 0.5f * 3.14159265f / 180.0f), asp = CDraw::ms_fAspectRatio;
+    CVector fr = cam.m_vecFront, up = cam.m_vecUp;
+    CVector rt(fr.y * up.z - fr.z * up.y, fr.z * up.x - fr.x * up.z, fr.x * up.y - fr.y * up.x);
+    // Direcao pela mira DESENHADA, achada com a mesma projecao que desenha a tela (CSprite::CalcScreenCoors): parte da frente da camera e corrige o
+    // erro em pixels ate a projecao de um ponto a 40 m cair em (CHairMultX*W, CHairMultY*H). Nao depende de saber o FOV certo (o chute com tan(FOV)
+    // errava: o amarelo, alvo do jogo, ficava 40 px acima da mira no print).
+    CVector dir = fr;
+    {
+        float tx = W * CCamera::m_f3rdPersonCHairMultX, ty = H * CCamera::m_f3rdPersonCHairMultY, kpx = 2.0f * tanH / W;
+        for (int it = 0; it < 5; ++it) {
+            CVector p = cam.m_vecSource + dir * 40.0f;
+            RwV3d in{ p.x, p.y, p.z }, out{}; float w = 0, h = 0;
+            if (!CSprite::CalcScreenCoors(in, &out, &w, &h, false, false)) break;
+            dir = dir + rt * ((tx - out.x) * kpx) + up * ((out.y - ty) * kpx);
+            float l = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+            dir = dir * (1.0f / (l > 0.0f ? l : 1.0f));
+        }
+    }
+    // O jogo mistura a direcao do cano (boca - origem) com a mira, e o cano montado aponta alguns graus para o lado (AIMDIAG: desvio_do_cano): o tiro saia
+    // deslocado para a esquerda. A origem passa a ficar na linha da mira, atras da boca, e o cano coincide com ela.
+    origin = muzzle - dir * 0.35f;
+    // O raio sai da camera, que fica atras do CJ: ele batia no proprio cavalo (log: o alvo parava a 3-6 m, na altura do pescoco do cavalo) e a bala ia
+    // para dentro dele. Comeca na frente da boca da arma e ignora o cavalo.
+    CVector mc = muzzle - cam.m_vecSource;
+    CVector pc = player->GetPosition() - cam.m_vecSource;
+    // o raio nao pode comecar antes do CJ (o print mostrou o alvo verde na cabeca dele): depois da boca e 0,8 m alem do CJ
+    float along = std::max({ 0.5f, mc.x * dir.x + mc.y * dir.y + mc.z * dir.z + 0.3f, pc.x * dir.x + pc.y * dir.y + pc.z * dir.z + 0.8f });
+    CVector cs = cam.m_vecSource + dir * along, ce = cam.m_vecSource + dir * wi->m_fWeaponRange, tgt = ce;
+    CColPoint cp; CEntity* hitEnt = nullptr;
+    CEntity* savedIgnore = CWorld::pIgnoreEntity;
+    CWorld::pIgnoreEntity = gRider >= 0 ? gHorses[gRider].ped : nullptr;
+    bool los = CWorld::ProcessLineOfSight(cs, ce, cp, hitEnt, true, true, true, true, true, false, false, true);
+    if (los) tgt = cp.m_vecPoint;
+    CWorld::pIgnoreEntity = savedIgnore;
+    static int tl = 0;
+    if (tl++ < 20) Log("FIREMOUNTED alvo=(%.1f,%.1f,%.1f) boca=(%.1f,%.1f,%.1f) acertou=%d", tgt.x, tgt.y, tgt.z, muzzle.x, muzzle.y, muzzle.z, hitEnt ? 1 : 0);
+    // Log do teste: o alvo que o PROPRIO jogo calcula (amarelo) ia para baixo da terra enquanto o nosso (verde) ficava certo, e a bala seguia o dele.
+    // A conta dele usa o FOV da camera (cam.m_fFOV), que e menor que o desenhado: o desvio vertical da mira sai errado. Durante o disparo o FOV da
+    // camera passa a ser o desenhado, e as duas contas coincidem.
+    // O jogo calcula a direcao do tiro sozinho (Find3rdPersonCamTargetVector) e ignora o alvo passado. A conta dele usa o FOV da camera e os
+    // multiplicadores da mira; so durante o disparo os multiplicadores sao trocados pelos que fazem a conta dele dar a nossa direcao.
+    float camTan = std::tan(cam.m_fFOV * 0.5f * 3.14159265f / 180.0f), c = dir.x * fr.x + dir.y * fr.y + dir.z * fr.z;
+    float da = (dir.x * up.x + dir.y * up.y + dir.z * up.z) / c, db = (dir.x * rt.x + dir.y * rt.y + dir.z * rt.z) / c;
+    float oldMx = CCamera::m_f3rdPersonCHairMultX, oldMy = CCamera::m_f3rdPersonCHairMultY, oldCamFov = cam.m_fFOV;
+    CCamera::m_f3rdPersonCHairMultY = 0.5f - da * asp / (2.0f * camTan);
+    CCamera::m_f3rdPersonCHairMultX = 0.5f + db / (2.0f * camTan);
+    bool ok = w->Fire(player, &origin, &muzzle, nullptr, &tgt, nullptr);
+    // som: o evento do ped nao toca montado (e a arma 72 e de mod, sem som proprio); o motor global toca o da pistola (CAudioEngine::ReportWeaponEvent)
+    if (ok) plugin::CallMethod<0x506F40, void*, int, int, CPhysical*>((void*)0xB6BC90, 145, 22, player);
+    if (ok) player->DoGunFlash(250, false);
+    if (ok) {
+        // Depuracao: o que o jogo fez de verdade (os tracos de bala que ele criou agora) contra o que pedimos, e o alvo que o proprio jogo calcularia
+        CVector gs, gt;
+        TheCamera.Find3rdPersonCamTargetVector(wi->m_fWeaponRange, muzzle, &gs, &gt);
+        gShotDbg.muzzle = muzzle; gShotDbg.tgt = tgt; gShotDbg.gameTgt = gt; gShotDbg.at = now;
+        Log("FIREMOUNTED fov camera=%.1f desenhado=%.1f", oldCamFov, fov);
+    }
+    // O tiro do jogo montado vai para o ponto (0,0,0) (log TRACO: o traco dele parte da boca rumo a origem do mundo: ponto de impacto zerado), entao nao ha impacto nem dano: o impacto e o traco saem daqui,
+    // da boca ate o ponto de mira. O log TRACOS diz quantos tracos o jogo criou.
+    if (ok) {
+        int made = 0;
+        for (unsigned i = 0; i < MAX_NUM_BULLETTRACES; ++i) if (CBulletTraces::aTraces[i].m_bExists && CBulletTraces::aTraces[i].m_nCreationTime >= (int)CTimer::m_snTimeInMilliseconds - 50) { ++made; const CBulletTrace& t = CBulletTraces::aTraces[i]; static int tl2 = 0; if (tl2++ < 40) Log("TRACO ini=(%.1f,%.1f,%.1f) fim=(%.1f,%.1f,%.1f) nossoAlvo=(%.1f,%.1f,%.1f) boca=(%.1f,%.1f,%.1f)", t.m_vecStart.x, t.m_vecStart.y, t.m_vecStart.z, t.m_vecEnd.x, t.m_vecEnd.y, t.m_vecEnd.z, tgt.x, tgt.y, tgt.z, muzzle.x, muzzle.y, muzzle.z); }
+        static int tr = 0;
+        if (tr++ < 40) Log("TRACOS jogo=%d los=%d acertou=%d alcance=%.0f", made, (int)los, hitEnt ? 1 : 0, wi->m_fWeaponRange);
+        if (los) { CVector st = muzzle; w->DoBulletImpact(player, hitEnt, &st, &tgt, &cp, 0); }
+    }
+    CCamera::m_f3rdPersonCHairMultX = oldMx; CCamera::m_f3rdPersonCHairMultY = oldMy;
+    if (ok) gShotAt = now; // AimPose toca a animacao de tiro desde o inicio do laco
+    static int lines = 0;
+    if (lines++ < 80) Log("FIREMOUNTED tipo=%d estado=%d clip=%u total=%u disparou=%d", type, (int)w->m_nState, w->m_nAmmoInClip, w->m_nAmmoTotal, (int)ok);
+}
+
+void DrawShotDebug() {
+    unsigned t = CTimer::m_snTimeInMilliseconds;
+    if (!gShotDbg.at || t - gShotDbg.at > 4000) return;
+    float W = (float)RsGlobal.maximumWidth, H = (float)RsGlobal.maximumHeight;
+    auto box = [&](float x, float y, float r, CRGBA c) { CSprite2d::DrawRect(CRect(x - r, y + r, x + r, y - r), c); };
+    auto proj = [&](const CVector& p, float r, CRGBA c) {
+        RwV3d in{ p.x, p.y, p.z }, out{}; float w = 0, h = 0;
+        if (CSprite::CalcScreenCoors(in, &out, &w, &h, true, false)) box(out.x, out.y, r, c);
+    };
+    box(W * CCamera::m_f3rdPersonCHairMultX, H * CCamera::m_f3rdPersonCHairMultY, 4, CRGBA(60, 120, 255, 255)); // onde a mira e desenhada
+    for (int i = 1; i <= 8; ++i) proj(gShotDbg.muzzle + (gShotDbg.tgt - gShotDbg.muzzle) * (i / 8.0f), 2.5f, CRGBA(255, 40, 40, 255)); // caminho pedido
+    proj(gShotDbg.tgt, 6, CRGBA(40, 255, 40, 255));       // alvo calculado aqui (verde)
+    proj(gShotDbg.gameTgt, 6, CRGBA(255, 230, 40, 255));  // alvo que o jogo calcularia (amarelo)
+    proj(gShotDbg.muzzle, 4, CRGBA(255, 255, 255, 255));  // boca da arma
+}
+
 void UpdateHorses(unsigned now, CPed* player) {
     if (!gHorseInit) InitHorse();
     if (!gHorseOn) return;
@@ -640,6 +909,8 @@ void UpdateHorses(unsigned now, CPed* player) {
     bool useHit = pad->NewState.ButtonTriangle > 0 && pad->OldState.ButtonTriangle <= 0;
     bool jumpHit = pad->NewState.ButtonSquare > 0 && pad->OldState.ButtonSquare <= 0;
     bool kickHit = pad->NewState.ShockButtonL > 0 && pad->OldState.ShockButtonL <= 0; // agachar (C)
+    // o coice usa a tecla de agachar: se ela chega ao jogo o CJ agacha na sela e fica agachado (log: agachado=1, sem comando de tiro)
+    if (gRiding) pad->NewState.ShockButtonL = 0;
     CVector pp = player->GetPosition();
     for (int i = 0; i < kHorseSpotN; ++i) {
         Horse& h = gHorses[i];

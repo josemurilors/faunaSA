@@ -5,6 +5,8 @@
 #include "CClock.h"
 #include "CFont.h"
 #include "CSprite2d.h"
+#include "CBulletTraces.h"
+#include "CSprite.h"
 #include "CAnimBlendHierarchy.h"
 #include "CPlayerInfo.h"
 #include "CHud.h"

@@ -22,7 +22,8 @@ MAP = {1: 1, 2: 2, 3: 4, 4: 31, 5: 32, 8: 33, 31: 5, 32: 6, 33: 7, 34: 9, 35: 10
        41: 40, 42: 41, 43: 42, 44: 43, 51: 36, 52: 37, 53: 38, 54: 39}
 # animacao do SA -> (grupo e animacao do Gun); duracao = a do Gun (a mesma das animacoes do cavalo)
 CLIPS = {'sit': ('h_idles', 'gun_h_standidle.ska'), 'sit_walk': ('h_walk', 'gun_h_walk.ska'), 'sit_run': ('h_walk', 'gun_h_trot.ska'),
-         'sit_galop': ('h_walk', 'gun_h_gallop.ska')}
+         'sit_galop': ('h_walk', 'gun_h_gallop.ska'), 'sit_kick': ('h_trample', 'gun_h_trample.ska')}
+FADE = (0.15, 0.25)  # o mesmo FADE['horse_kick_forward'] de gun_to_ifp.py
 PLACE_DX, PLACE_DZ = 0.05, 0.05      # horse.hpp: PlaceRider(dx=-0.05) e +0.05 em z; a raiz da animacao compensa
 SEAT_DY = 0.326      # `sit` original leva a raiz 0,326 m para tras; montar/sair originais sobem isso para a sela nova (na origem)
 LOWER = {0, 1, 41, 42, 43, 44, 51, 52, 53, 54}
@@ -90,21 +91,40 @@ class Rider:
         hip_g = self.sa_point([(Pg[40][k] + Pg[36][k]) / 2 for k in range(3)])
         return loc, [hip_g[k] - hip_cj[k] for k in range(3)]
 
-    def build(self, orig_seqs, gname, grupo):
+    def build(self, orig_seqs, gname, grupo, follow=False):
         an = self.gun.anim(gname, grupo); dur = an['duracao']
         n = max(8, int(round(dur * 30)))
         bones = [bid for bid, _, _ in orig_seqs]; otype = {bid: t for bid, t, _ in orig_seqs}
         frames = [self.pose(an, dur * 60 * k / n) for k in range(n + 1)]
         mean = [sum(f[1][i] for f in frames[:-1]) / n for i in range(3)]
-        root = (mean[0] + PLACE_DX, mean[1], mean[2] - PLACE_DZ)
+        # follow (empinar): raiz constante na pose de repouso (quadro 0); o deslocamento da sela vai para src/horse_rear.hpp e o horse.hpp move o
+        # CJ por ele (a raiz gravada na animacao nao acompanhava a sela no jogo). A mistura com a pose parada (FADE do cavalo) vale para os dois.
+        src = frames[0][1] if follow else mean
+        root = (src[0] + PLACE_DX, src[1], src[2] - PLACE_DZ)
         out = {bid: [] for bid in bones}; prev = {}
-        for k, (loc, _) in enumerate(frames):
+        q0 = {bid: G.m2q(X.tp(frames[0][0][self.sa.bone_frame[bid]])) for bid in bones}
+        table = []
+        for k, (loc, rt) in enumerate(frames):
             t = dur * k / n
+            w = 1.0
+            if follow:
+                u = k / n; w = max(0.0, min(1.0, u / FADE[0], (1 - u) / FADE[1])); w = w * w * (3 - 2 * w)
+                table.append([w * (rt[i] - frames[0][1][i]) for i in range(3)])
             for bid in bones:
                 q = G.m2q(X.tp(loc[self.sa.bone_frame[bid]]))
+                if follow:
+                    a0 = q0[bid]
+                    if sum(x * y for x, y in zip(a0, q)) < 0: q = tuple(-c for c in q)
+                    q = X.slerp(a0, q, w)
                 if bid in prev and sum(a * b for a, b in zip(q, prev[bid])) < 0: q = tuple(-c for c in q)
                 prev[bid] = q
                 out[bid].append((q, t, root if bid == 0 else None))
+        if follow:
+            rows = ',\n'.join('    {%.3ff, %.3ff, %.3ff}' % tuple(r) for r in table)
+            head = ('// Gerado por tools/gun_rider_ifp.py (sit_kick): deslocamento da sela/quadril do cavaleiro no empinar, relativo ao repouso,\n'
+                    '// em metros {direita, frente, cima}, ja com a mistura do FADE; %d amostras uniformes em %.4f s.\n' % (len(table), dur))
+            body = 'constexpr int kRearN = %d;\nconstexpr float kRearDur = %.4ff;\nconstexpr float kRear[kRearN][3] = {\n%s\n};\n' % (len(table), dur, rows)
+            open(os.path.join(HERE, '..', 'src', 'horse_rear.hpp'), 'w').write(head + body)
         return [(bid, otype[bid], out[bid]) for bid in bones]
 
 def shifted(seqs):
@@ -134,18 +154,21 @@ def main():
     _, orig = X.read_ifp(orig_ifp)
     sit = next(s for n, s, _ in orig if n.lower() == 'sit')
     odict = {n.lower(): s for n, s, _ in orig}
+    odict['sit_kick'] = odict['sit']                          # nao existe no original: mesmos ossos da `sit`
     rider = Rider(pak, sit)
     gs = {b: k[0][1] for b, _, k in next(x for n, x, _ in X.read_ifp(sys.argv[4] if len(sys.argv) > 4 else PED_IFP)[1] if n.lower() == 'gun_stand')}
     base = (X.row2col(G.q2m(gs[0])), X.row2col(G.q2m(gs[1])))     # raiz e pelve da base de mira
     _, cur = X.read_ifp(work)
+    if not any(n.lower() == 'sit_kick' for n, _, _ in cur): cur.append(('sit_kick', None, None))
     result = []; lower = []
     for name, seqs, raw in cur:
         key = name.lower()
         if key.startswith('sitl'): continue                      # refeitas abaixo
         if key in CLIPS:
             grupo, gname = CLIPS[key]
-            s = rider.build(odict[key], gname, grupo)
-            result.append((name, X.anim_bytes_c(name, s))); lower.append(legs(name, s, base))
+            s = rider.build(odict[key], gname, grupo, key == 'sit_kick')
+            result.append((name, X.anim_bytes_c(name, s)))
+            if key != 'sit_kick': lower.append(legs(name, s, base))   # o empinar nao tem versao de mira
             print('%-10s <- %-20s %.2f s  raiz %s' % (name, gname, rider.gun.anim(gname, grupo)['duracao'], [round(c, 3) for c in s[0][2][0][2]]))
         elif key.startswith(('jump_on', 'exit_')):
             result.append((name, X.anim_bytes_c(name, shifted(odict[key]))))

@@ -16,7 +16,7 @@
 
 | | |
 | --- | --- |
-| **Versão** | 1.0.1 |
+| **Versão** | 1.0.2 |
 | **Estado** | Estável (1.0): spawn, animação, IA básica, população por zona, buzina, cavalo e os animais extras funcionam na instalação do autor; falta a paridade com o mod original e há problemas conhecidos (seção 7) |
 | **Contexto** | Projeto pessoal de modding, feito a partir da engenharia reversa do Myths Maker 2.7 |
 | **Alvo** | `gta_sa.exe` 1.0 US, com ASI Loader, Modloader e Open Limit Adjuster |
@@ -38,7 +38,7 @@
 
 ## Início rápido
 
-**Pacote pronto:** baixe `FaunaSA-v1.0.1.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`, onde já ficam `modloader` e `cleo`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader (`modloader\Myths Maker`). Não há mais nada para instalar. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
+**Pacote pronto:** baixe `FaunaSA-v1.0.2.zip` na [release](https://github.com/josemurilors/faunaSA/releases), extraia na pasta do jogo (ao lado do `gta_sa.exe`, onde já ficam `modloader` e `cleo`) e pronto: o zip já traz o plugin, a configuração, os animais, as animações geradas e os modelos registrados no Modloader (`modloader\Myths Maker`). Não há mais nada para instalar. Remova o `Myths_Maker.cs`/`MythsMaker.asi` antigos.
 
 **A partir do código** (para quem já tem o mod original):
 
@@ -181,7 +181,7 @@ O `build.bat` já compila e roda `tests\test_config.exe` antes de gerar `out\Fau
 - [ ] Animação dos 6 tipos sem `.ifp` (vaca, gorila, raposa, capivara, pato, galinha): IFPs procedurais gerados (pernas em pares, sem pata a pata; falta ver no jogo)
 - [x] Sons dos animais (`random`, `damage`, `anim_N`, `spawn`) pelo `bass.dll` do jogo (sem teste no jogo)
 - [ ] Animais extras (`Anim90`–`Anim100`): importados, com animações geradas e modelos reduzidos; falta ver no jogo (o leão tem uma perna e a cauda sem animação)
-- [ ] **Problema conhecido:** montado, as balas saem mais baixas que a mira (todas as armas); `[Horse] AlignGun=0` e o log `SHOTDIAG` do `FaunaSA.log` são o ponto de partida para corrigir
+- [x] **Tiro montado:** corrigido na 1.0.2 (o tiro do jogo ia para o ponto (0,0,0); o plugin aplica o impacto na linha da mira)
 - [ ] Cavalo: nasce nos 9 locais do mod, monta/desmonta, anda, corre, galopa, pula, sons de casco (implementado; falta testar no jogo; sem garupa nem cavalo domável)
 - [ ] Paridade: interação, domesticar, radar, caçador, locais por dia, clima
 - [ ] Medição de desempenho contra o mod original
